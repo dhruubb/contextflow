@@ -40,6 +40,18 @@ export const POST = route({ body: BriefZ, permission: 'brief.generate' }, async 
     new Map(((docLinks ?? []) as unknown as { document: { id: string; title: string } | null }[]).filter((d) => d.document).map((d) => [d.document!.id, d.document!])).values(),
   );
   const me = ((participants ?? []) as unknown as { user_id: string; attended: boolean }[]).find((p) => p.user_id === ctx.user.id);
+  const { data: people } = await ctx.supabase.from('workspace_members').select('user_id, profile:profiles(full_name)').eq('workspace_id', ctx.workspace.id);
+  const nameOf = new Map(((people ?? []) as unknown as { user_id: string; profile: { full_name: string } | null }[]).map((p) => [p.user_id, p.profile?.full_name ?? 'someone']));
+  const titleOf = new Map(tasks.map((t) => [t.id, t.title]));
+  const isUuid = (v: string | null) => !!v && /^[0-9a-f-]{36}$/i.test(v);
+  const nameOrValue = (v: string | null) => (isUuid(v) ? nameOf.get(v!) ?? titleOf.get(v!) ?? null : v);
+  const fmtShort = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+  /** Safety net: never show raw ids or ISO dates to the reader. */
+  const clean = (text: string) =>
+    text
+      .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, (id) => (titleOf.has(id) ? `"${titleOf.get(id)}"` : nameOf.get(id) ?? 'a task'))
+      .replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_m, y, mo, d) => fmtShort(`${y}-${mo}-${d}T12:00:00Z`))
+      .replace(/^Task\s+"/, '"');
 
   const prompt = catchUpPrompt({
     reader: { name: ctx.profile.full_name, attended_this_meeting: me?.attended ?? false, was_invited: !!me },
@@ -47,7 +59,14 @@ export const POST = route({ body: BriefZ, permission: 'brief.generate' }, async 
     attendance: ((participants ?? []) as unknown as { attended: boolean; profile: { full_name: string } | null }[]).map((p) => ({ name: p.profile?.full_name, attended: p.attended })),
     decisions,
     tasks: tasks.map((t) => ({ id: t.id, title: t.title, status: t.status, priority: t.priority, due: t.due_date?.slice(0, 10) ?? null, owner: t.assignee?.full_name ?? null, is_reader: t.assignee_id === ctx.user.id, carried_forward: t.carried_forward, outcome: t.outcome_notes })),
-    changes_since_meeting: (changes ?? []).map((c) => ({ task_id: c.task_id, event: c.event_type, from: c.previous_value, to: c.new_value, notes: c.notes, at: c.created_at.slice(0, 10) })),
+    changes_since_meeting: (changes ?? []).map((c) => ({
+      task: titleOf.get(c.task_id) ?? 'a task',
+      event: c.event_type.replace('_', ' '),
+      from: nameOrValue(c.previous_value),
+      to: c.event_type === 'carried_forward' ? 'next meeting' : nameOrValue(c.new_value),
+      notes: c.notes?.startsWith('Handover ') ? null : c.notes,
+      on: fmtShort(c.created_at),
+    })),
     documents,
   });
 
@@ -58,8 +77,13 @@ export const POST = route({ body: BriefZ, permission: 'brief.generate' }, async 
   const valid = new Set([meeting.id, ...taskIds, ...documents.map((d) => d.id)]);
   const brief = {
     ...result.data,
+    headline: clean(result.data.headline),
+    summary: clean(result.data.summary),
+    changes: result.data.changes.slice(0, 4).map(clean),
+    suggested_next_steps: result.data.suggested_next_steps.slice(0, 4).map((s) => clean(s).replace(/\.$/, '')),
+    key_decisions: result.data.key_decisions.map((d) => ({ title: clean(d.title), why_it_matters: d.why_it_matters ? clean(d.why_it_matters) : null })),
     references: result.data.references.filter((r) => valid.has(r.id)),
-    your_action_items: result.data.your_action_items.map((a) => ({ ...a, task_id: a.task_id && valid.has(a.task_id) ? a.task_id : null })),
+    your_action_items: result.data.your_action_items.map((a) => ({ ...a, note: a.note ? clean(a.note) : null, task_id: a.task_id && valid.has(a.task_id) ? a.task_id : null })),
   };
   if (result.generationId) await ctx.supabase.from('ai_generations').update({ parsed_output: brief }).eq('id', result.generationId);
 

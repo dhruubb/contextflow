@@ -1,0 +1,37 @@
+# Render Blueprint — New → Blueprint → select this repo (or create the Web Service manually, same settings)
+services:
+  - type: web
+    name: contextflow
+    runtime: node
+    plan: free                      # free spins down after 15 min idle (30–60 s cold start); use "starter" for always-on
+    region: singapore
+    buildCommand: npm ci --no-audit --no-fund && npm run build
+    startCommand: npm run start      # next start listens on $PORT automatically
+    healthCheckPath: /login
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: LOG_TO_FILE             # Render disk is ephemeral: log JSON to stdout (Render Logs)
+        value: "false"
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: GROQ_REASONING_EFFORT
+        value: medium
+      # Secrets — set values in the Render dashboard (sync: false = prompted, never stored in git)
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: CRON_SECRET
+        generateValue: true
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false                  # e.g. https://contextflow.onrender.com

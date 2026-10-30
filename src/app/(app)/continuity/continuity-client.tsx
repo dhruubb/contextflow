@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
 import type { ContinuityAnalysis } from '@/lib/ai/prompts';
 import { api } from '@/lib/client-api';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@/components/ui';
+import { Badge, Button, Card, CardContent, Skeleton } from '@/components/ui';
 import { CarryButton } from '@/components/task-actions';
 
 export { CarryButton };
@@ -28,16 +28,16 @@ export function AiAnalysis({ canCarry, nextMeeting, titles }: { canCarry: boolea
   const tone = { high: 'red', medium: 'amber', low: 'neutral' } as const;
 
   return (
-    <Card className="border-indigo-500/30">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-1.5"><Sparkles className="size-4 text-indigo-500" /> AI risk briefing</CardTitle>
+    <Card>
+      <div className="flex items-center justify-between border-b px-5 py-3.5">
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold"><Sparkles className="size-4 text-indigo-500" /> AI summary</h2>
         {data && <Button size="sm" variant="ghost" onClick={run} loading={loading}>Refresh</Button>}
-      </CardHeader>
-      <CardContent>
+      </div>
+      <CardContent className="p-5">
         {!data && !loading && (
           <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">Groq reads the risk signals and writes a plain-language briefing: what’s at risk, why, and who should do what. It never changes the score.</p>
-            <Button variant="secondary" className="w-full" onClick={run}><Sparkles /> Generate briefing</Button>
+            <p className="text-sm text-muted-foreground">Get a short summary of what’s at risk and who should do what next.</p>
+            <Button variant="secondary" className="w-full" onClick={run}><Sparkles /> Summarise risks</Button>
           </div>
         )}
         {loading && (

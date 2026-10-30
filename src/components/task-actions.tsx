@@ -141,7 +141,7 @@ export function CompleteDialog({ task, open, onClose }: { task: ActionTask; open
   );
 }
 
-export function CompleteButton({ task, size = 'sm', variant = 'outline' }: { task: ActionTask; size?: 'sm' | 'default'; variant?: 'outline' | 'default' }) {
+export function CompleteButton({ task, size = 'sm', variant = 'outline' }: { task: ActionTask; size?: 'sm' | 'default'; variant?: 'outline' | 'default' | 'ghost' }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -152,7 +152,7 @@ export function CompleteButton({ task, size = 'sm', variant = 'outline' }: { tas
 }
 
 /* --------------------------------------------------------------- owner picker */
-export function OwnerPicker({ task, members, editable, compact }: { task: ActionTask; members: MemberOpt[]; editable: boolean; compact?: boolean }) {
+export function OwnerPicker({ task, members, editable, compact, primary }: { task: ActionTask; members: MemberOpt[]; editable: boolean; compact?: boolean; primary?: boolean }) {
   const { patch, busy } = useTaskPatch();
   const current = members.find((m) => m.id === task.assignee_id);
   const label = current?.name ?? 'Unassigned';
@@ -162,7 +162,7 @@ export function OwnerPicker({ task, members, editable, compact }: { task: Action
       align="left"
       trigger={
         compact ? (
-          <Button size="sm" variant={current ? 'outline' : 'default'} loading={!!busy}><UserPlus /> {current ? 'Reassign' : 'Assign owner'}</Button>
+          <Button size="sm" variant={primary ?? !current ? 'default' : 'outline'} loading={!!busy}><UserPlus /> {current ? 'Reassign' : 'Assign owner'}</Button>
         ) : (
           <button className={cn('inline-flex items-center gap-1 rounded px-1 py-0.5 text-xs hover:bg-accent', !current && 'text-amber-600 dark:text-amber-400', busy && 'opacity-60')}>
             {label} <ChevronDown className="size-3 text-muted-foreground" />
@@ -263,16 +263,16 @@ export function TaskRowMenu({
 }
 
 /* --------------------------------------------------------------- generic small action buttons */
-export function StartButton({ task, label = 'Start', size = 'sm' }: { task: ActionTask; label?: string; size?: 'sm' | 'default' }) {
+export function StartButton({ task, label = 'Start', size = 'sm', variant = 'outline' }: { task: ActionTask; label?: string; size?: 'sm' | 'default'; variant?: 'outline' | 'default' }) {
   const { patch, busy } = useTaskPatch();
-  return <Button size={size} variant="outline" loading={!!busy} onClick={() => patch(task.id, { status: 'in_progress', note: label === 'Unblock' ? 'Unblocked' : null }, label === 'Unblock' ? 'Unblocked — back In Progress' : 'Started')}><Play /> {label}</Button>;
+  return <Button size={size} variant={variant} loading={!!busy} onClick={() => patch(task.id, { status: 'in_progress', note: label === 'Unblock' ? 'Unblocked' : null }, label === 'Unblock' ? 'Unblocked — back In Progress' : 'Started')}><Play /> {label}</Button>;
 }
 
-export function DeadlineButton({ task, label = 'Change deadline' }: { task: ActionTask; label?: string }) {
+export function DeadlineButton({ task, label = 'Change deadline', variant = 'outline' }: { task: ActionTask; label?: string; variant?: 'outline' | 'default' | 'ghost' }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button size="sm" variant="outline" onClick={() => setOpen(true)}><CalendarClock /> {label}</Button>
+      <Button size="sm" variant={variant} onClick={() => setOpen(true)}><CalendarClock /> {label}</Button>
       {open && <DeadlineDialog task={task} open onClose={() => setOpen(false)} />}
     </>
   );

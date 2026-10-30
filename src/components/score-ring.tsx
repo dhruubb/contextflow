@@ -10,7 +10,7 @@ export function ScoreRing({ score, status, size = 76 }: { score: number; status:
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-lg font-semibold tabular-nums leading-none">{score}</span>
-        <span className="mt-0.5 text-[10px] capitalize text-muted-foreground">{status}</span>
+        <span className="mt-0.5 text-[10px] text-muted-foreground">{status === 'healthy' ? 'Good' : status === 'moderate' ? 'Fair' : 'At risk'}</span>
       </div>
     </div>
   );

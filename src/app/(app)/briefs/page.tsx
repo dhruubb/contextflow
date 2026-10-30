@@ -31,12 +31,12 @@ export default async function BriefsPage({ searchParams }: { searchParams: Promi
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           {canGen ? (
-            <BriefGenerator missed={missed} meetings={completed ?? []} initialMeeting={meeting} />
+            <BriefGenerator missed={missed} meetings={completed ?? []} initialMeeting={meeting} selfId={ctx.user.id} canAdd={can(ctx.role, 'task.create')} />
           ) : (
             <Card><CardContent className="p-4 text-sm text-muted-foreground">Viewers can read meetings but cannot generate AI briefs.</CardContent></Card>
           )}
           <Card>
-            <CardHeader><CardTitle>Your previous catch-up briefs</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Your previous summaries</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               {(past ?? []).length === 0 && <p className="text-sm text-muted-foreground">None yet.</p>}
               {(past ?? []).map((g) => (
@@ -45,7 +45,7 @@ export default async function BriefsPage({ searchParams }: { searchParams: Promi
                     {(g.parsed_output as CatchUpBrief | null)?.headline ?? 'Brief'}
                     <span className="ml-2 text-xs font-normal text-muted-foreground">{titles.get(g.target_id ?? '') ?? 'meeting'} · {relTime(g.created_at)}</span>
                   </summary>
-                  <div className="mt-3 border-t pt-3">{g.parsed_output ? <CatchUpView brief={g.parsed_output as CatchUpBrief} /> : null}</div>
+                  <div className="mt-3 border-t pt-3">{g.parsed_output ? <CatchUpView brief={g.parsed_output as CatchUpBrief} meetingId={g.target_id ?? ''} selfId={ctx.user.id} canAdd={can(ctx.role, 'task.create') && !!g.target_id} /> : null}</div>
                 </details>
               ))}
             </CardContent>

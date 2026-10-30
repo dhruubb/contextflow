@@ -80,8 +80,13 @@ export type CatchUpBrief = z.infer<typeof CatchUpZ>;
 export function catchUpPrompt(input: unknown) {
   return {
     system: `You write personalized catch-up briefs for an employee who missed a meeting.
-Be specific and brief. Prioritise what this person must know and do.
-Only reference task ids, meeting ids and document ids that appear in the input.
+Write in simple, plain English: short sentences, no jargon. Prioritise what this person must know and do.
+- headline: max 10 words, e.g. "What you missed in the Meridian onboarding retro".
+- summary: 2-3 short sentences.
+- changes: max 4 items, each one short sentence that names the task by its TITLE (never print ids or UUIDs).
+- suggested_next_steps: max 4 items; each is ONE concrete action the reader can do, written as a short imperative task title (max 10 words, no dates), e.g. "Request uptime export from monitoring vendor".
+- Write dates like "31 Oct", never "2026-10-31".
+Only put ids in task_id / references fields, and only ids that appear in the input.
 JSON shape: {"headline": string, "summary": string, "key_decisions": [{"title","why_it_matters"}], "your_action_items": [{"task_id","title","deadline","note"}], "changes": [string], "suggested_next_steps": [string], "references": [{"type":"meeting"|"document"|"task","id","title"}]}`,
     user: JSON.stringify(input),
   };

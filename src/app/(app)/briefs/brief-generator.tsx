@@ -8,7 +8,7 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Sele
 import { CatchUpView } from '@/components/catchup-brief';
 import { fmtDate } from '@/lib/utils';
 
-export function BriefGenerator({ missed, meetings, initialMeeting }: { missed: { id: string; title: string }[]; meetings: { id: string; title: string; scheduled_at: string }[]; initialMeeting?: string }) {
+export function BriefGenerator({ missed, meetings, initialMeeting, selfId, canAdd }: { missed: { id: string; title: string }[]; meetings: { id: string; title: string; scheduled_at: string }[]; initialMeeting?: string; selfId: string; canAdd: boolean }) {
   const router = useRouter();
   const [meetingId, setMeetingId] = useState(initialMeeting ?? missed[0]?.id ?? meetings[0]?.id ?? '');
   const [brief, setBrief] = useState<CatchUpBrief | null>(null);
@@ -34,8 +34,8 @@ export function BriefGenerator({ missed, meetings, initialMeeting }: { missed: {
     <Card className="border-indigo-500/30">
       <CardHeader>
         <div>
-          <CardTitle className="flex items-center gap-1.5"><Sparkles className="size-4 text-indigo-500" /> Generate a catch-up brief</CardTitle>
-          <CardDescription>Decisions, your tasks, what changed since, and linked documents — written for you.</CardDescription>
+          <CardTitle className="flex items-center gap-1.5"><Sparkles className="size-4 text-indigo-500" /> Catch up on a meeting</CardTitle>
+          <CardDescription>Pick a meeting to get a short summary of what you missed and what to do next.</CardDescription>
         </div>
       </CardHeader>
       <CardContent>
@@ -46,12 +46,12 @@ export function BriefGenerator({ missed, meetings, initialMeeting }: { missed: {
               <option key={m.id} value={m.id}>{missedIds.has(m.id) ? '● ' : ''}{m.title} · {fmtDate(m.scheduled_at)}</option>
             ))}
           </Select>
-          <Button variant="secondary" onClick={generate} loading={loading} disabled={!meetingId}>Generate</Button>
+          <Button variant="secondary" onClick={generate} loading={loading} disabled={!meetingId}>Get summary</Button>
         </div>
         {missed.length > 0 && <p className="mt-1 text-[11px] text-muted-foreground">● = you missed this meeting</p>}
         {error && <p className="mt-3 rounded-md border border-red-500/30 bg-red-500/5 p-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
         {loading && <p className="mt-4 animate-pulse text-sm text-muted-foreground">Reading notes, decisions and task history…</p>}
-        {brief && <div className="animate-in mt-4 border-t pt-4"><CatchUpView brief={brief} /></div>}
+        {brief && <div className="animate-in mt-4 border-t pt-4"><CatchUpView brief={brief} meetingId={meetingId} selfId={selfId} canAdd={canAdd} /></div>}
       </CardContent>
     </Card>
   );

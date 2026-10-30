@@ -239,6 +239,22 @@ gh repo create contextflow --private --source=. --push
 6. **Telegram:** no webhook is needed. Account linking ("I pressed Start") and `npm run demo:telegram` both use `getUpdates`, which works on Vercel. Only register the webhook (§6) if you want fully automatic linking, and note that once a webhook is set, `getUpdates`-based linking stops working.
 7. Logs go to Vercel's runtime logs (stdout JSON). Add a Log Drain for persistence (§7).
 
+### Deploying on Render instead
+
+`render.yaml` (Blueprint) and `.node-version` are included.
+
+1. Push to GitHub (same commands as above).
+2. Render → **New → Blueprint** → pick the repo. Alternatively, create a **Web Service** with:
+   - Runtime: Node
+   - Build command: `npm ci --no-audit --no-fund && npm run build`
+   - Start command: `npm run start`
+   - Env vars: `NODE_VERSION=22` and `LOG_TO_FILE=false`
+3. Fill in the secrets when prompted: Supabase URL, anon key, service role key, `GROQ_API_KEY`, `TELEGRAM_BOT_TOKEN`, and `NEXT_PUBLIC_APP_URL=https://<service>.onrender.com`. `CRON_SECRET` is generated for you.
+   `NEXT_PUBLIC_*` values are baked in at build time; if you change them, trigger a new deploy.
+4. In Supabase → Authentication → URL Configuration, set the Site URL to the Render URL.
+5. **Reminders:** `vercel.json` crons don't run on Render. Use the included GitHub Action (`.github/workflows/reminders.yml`, daily at 09:00 IST, plus a manual "Run workflow" button). Add the repo secrets `APP_URL` and `CRON_SECRET`, using the value Render generated. Or use **Notifications → Send due reminders now**.
+6. **Free plan:** the service sleeps after 15 minutes idle, and the first request then takes 30–60 s. Open the app a minute before a demo, or use the Starter plan.
+
 ## 9. End-to-end demo checklist
 
 | # | Step | Where |
