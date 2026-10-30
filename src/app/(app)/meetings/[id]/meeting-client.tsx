@@ -1,10 +1,11 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRightLeft, Check, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowRightLeft, Check, NotebookPen, Sparkles, Trash2, Users } from 'lucide-react';
+import { SectionHeader } from '@/components/meta';
 import { toast } from 'sonner';
 import { api } from '@/lib/client-api';
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Select, Textarea } from '@/components/ui';
+import { Avatar, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Select, Textarea } from '@/components/ui';
 import { fmtDate, isOverdue } from '@/lib/utils';
 
 /* ---------------------------------------------------------------- status */
@@ -48,17 +49,15 @@ export function NotesEditor({ meetingId, initial, canEdit }: { meetingId: string
   }
   return (
     <Card>
-      <CardHeader>
-        <div>
-          <CardTitle>Raw notes</CardTitle>
-          <CardDescription>Type or paste notes. AI extraction works on what is saved here.</CardDescription>
-        </div>
-        {canEdit && (
-          <Button size="sm" onClick={save} loading={saving} disabled={!dirty}>
-            {dirty ? 'Save notes' : 'Saved'}
+      <SectionHeader
+        icon={NotebookPen}
+        title="Meeting notes"
+        action={canEdit && (
+          <Button size="sm" variant={dirty ? 'default' : 'ghost'} onClick={save} loading={saving} disabled={!dirty}>
+            {dirty ? 'Save notes' : <><Check /> Saved</>}
           </Button>
         )}
-      </CardHeader>
+      />
       <CardContent>
         {canEdit ? (
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={9} placeholder="Who said what, what was agreed, who owns what, by when…" className="font-mono text-[13px]" />
@@ -104,23 +103,26 @@ export function AttendanceEditor({
   const notIn = members.filter((m) => !list.some((p) => p.user_id === m.id));
   return (
     <Card>
-      <CardHeader>
-        <div>
-          <CardTitle>Participants</CardTitle>
-          <CardDescription>{completed ? `${list.filter((p) => p.attended).length} of ${list.length} attended` : 'Tick who attended'}</CardDescription>
-        </div>
-        {canEdit && dirty && <Button size="sm" onClick={save} loading={saving}>Save</Button>}
-      </CardHeader>
-      <CardContent className="space-y-1">
+      <SectionHeader
+        icon={Users}
+        title="People"
+        count={list.length}
+        action={canEdit && dirty ? <Button size="sm" onClick={save} loading={saving}>Save</Button> : <span className="text-xs text-muted-foreground">{list.filter((p) => p.attended).length} attended</span>}
+      />
+      <CardContent className="space-y-0.5 p-3">
         {list.map((p) => (
-          <div key={p.user_id} className="flex items-center gap-2 text-sm">
-            {canEdit ? (
-              <input type="checkbox" checked={p.attended} onChange={() => setList(list.map((x) => (x.user_id === p.user_id ? { ...x, attended: !x.attended } : x)))} className="accent-[hsl(var(--primary))]" />
-            ) : (
-              <span className={`size-2 rounded-full ${p.attended ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`} />
-            )}
-            <span className="flex-1">{p.name}</span>
-            {completed && !p.attended && <Badge tone="indigo">missed</Badge>}
+          <div key={p.user_id} className="group flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-accent/40">
+            <Avatar name={p.name} className="size-6 text-[9px]" />
+            <span className="flex-1 truncate">{p.name}</span>
+            <button
+              type="button"
+              disabled={!canEdit}
+              onClick={() => setList(list.map((x) => (x.user_id === p.user_id ? { ...x, attended: !x.attended } : x)))}
+              title={canEdit ? 'Toggle attendance' : undefined}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${p.attended ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : completed ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400' : 'bg-muted text-muted-foreground'} ${canEdit ? 'cursor-pointer hover:brightness-110' : 'cursor-default'}`}
+            >
+              {p.attended ? <><Check className="size-3" /> Attended</> : completed ? 'Missed' : 'Invited'}
+            </button>
             {canEdit && (
               <button onClick={() => setList(list.filter((x) => x.user_id !== p.user_id))} className="text-muted-foreground hover:text-red-500" aria-label="Remove">
                 <Trash2 className="size-3.5" />
@@ -165,12 +167,7 @@ export function CarryForwardPanel({ meetingId, candidates }: { meetingId: string
   }
   return (
     <Card>
-      <CardHeader>
-        <div>
-          <CardTitle className="flex items-center gap-1.5"><ArrowRightLeft className="size-4 text-amber-500" /> Carry forward</CardTitle>
-          <CardDescription>Unresolved tasks from earlier work. Overdue and blocked are pre-selected.</CardDescription>
-        </div>
-      </CardHeader>
+      <SectionHeader icon={ArrowRightLeft} tone="text-amber-500" title="Bring unfinished tasks" count={candidates.length} />
       <CardContent>
         {candidates.length === 0 ? (
           <p className="text-xs text-muted-foreground">Every unresolved task is already on this meeting.</p>

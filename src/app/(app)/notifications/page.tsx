@@ -1,4 +1,6 @@
-import { Bell } from 'lucide-react';
+import Link from 'next/link';
+import { Bell, CheckCheck, Clock, Send, XCircle } from 'lucide-react';
+import { NotificationIcon, SectionHeader, dayLabel } from '@/components/meta';
 import { requireContext } from '@/lib/auth';
 import { PageHeader } from '@/components/shell';
 import { Badge, Card, CardContent, CardHeader, CardTitle, Empty, Table } from '@/components/ui';
@@ -51,27 +53,52 @@ export default async function NotificationsPage() {
           </Card>
         </div>
         <Card className="lg:col-span-2">
-          <CardHeader><CardTitle>History & delivery status</CardTitle></CardHeader>
+          <SectionHeader icon={Bell} title="Inbox" count={(history ?? []).length} action={unreadIds.size > 0 ? <span className="text-xs font-medium text-red-500">{unreadIds.size} new</span> : undefined} />
           {(history ?? []).length === 0 ? (
-            <CardContent><Empty title="No notifications yet" icon={<Bell />}>You’ll see every alert here, including whether Telegram delivered it.</Empty></CardContent>
+            <div className="p-6"><Empty title="No notifications yet" icon={<Bell />}>Assignments, deadlines, meetings and handovers will show up here.</Empty></div>
           ) : (
-            <Table>
-              <thead><tr><th>Event</th><th>Message</th><th>Channel</th><th>Status</th><th>When</th></tr></thead>
-              <tbody>
-                {(history ?? []).map((n) => (
-                  <tr key={n.id}>
-                    <td className="whitespace-nowrap text-xs font-medium">
-                      {unreadIds.has(n.id) && <span className="mr-1.5 inline-block size-1.5 rounded-full bg-red-500 align-middle" title="New" />}
-                      {EVENT_LABEL[n.event_type] ?? n.event_type}
-                    </td>
-                    <td className="max-w-sm text-xs text-muted-foreground"><p className="font-medium text-foreground">{n.title}</p>{n.message}{n.error_message && <p className="text-red-500">Error: {n.error_message}</p>}</td>
-                    <td><Badge tone={n.channel === 'telegram' ? 'indigo' : 'neutral'}>{n.channel === 'in_app' ? 'in-app' : n.channel}</Badge></td>
-                    <td><Badge tone={n.status === 'delivered' ? 'green' : n.status === 'failed' ? 'red' : 'amber'}>{n.status}</Badge></td>
-                    <td className="whitespace-nowrap text-xs text-muted-foreground">{fmtDateTime(n.sent_at ?? n.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
+            <div>
+              {Object.entries(
+                (history ?? []).reduce<Record<string, typeof history>>((acc, n) => {
+                  const k = dayLabel(n.sent_at ?? n.created_at);
+                  (acc[k] ??= []).push(n);
+                  return acc;
+                }, {}),
+              ).map(([day, list]) => (
+                <div key={day}>
+                  <p className="border-b bg-muted/30 px-5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{day}</p>
+                  <ul className="divide-y">
+                    {(list ?? []).map((n) => {
+                      const target = n.target_type === 'action_item' ? `/tasks/${n.target_id}` : n.target_type === 'meeting' ? `/meetings/${n.target_id}` : n.target_type === 'handover' ? `/handovers/${n.target_id}` : null;
+                      const row = (
+                        <div className={`flex items-start gap-3 px-5 py-3 ${target ? 'hover:bg-accent/40' : ''}`}>
+                          <NotificationIcon event={n.event_type} />
+                          <div className="min-w-0 flex-1">
+                            <p className="flex items-center gap-1.5 text-sm font-medium">
+                              {unreadIds.has(n.id) && <span className="size-1.5 shrink-0 rounded-full bg-red-500" title="New" />}
+                              {n.title}
+                            </p>
+                            <p className="line-clamp-2 text-xs text-muted-foreground">{n.message}</p>
+                            {n.error_message && <p className="mt-0.5 text-xs text-red-500">{n.error_message}</p>}
+                          </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <span className="text-[11px] text-muted-foreground">{new Date(n.sent_at ?? n.created_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' })}</span>
+                            <span
+                              title={n.channel === 'telegram' ? `Telegram: ${n.status}` : 'Shown in app (Telegram not connected)'}
+                              className={`inline-flex items-center gap-1 text-[11px] ${n.status === 'failed' ? 'text-red-500' : n.status === 'pending' ? 'text-amber-500' : 'text-muted-foreground'}`}
+                            >
+                              {n.channel === 'telegram' ? <Send className="size-3" /> : <Bell className="size-3" />}
+                              {n.status === 'delivered' ? <CheckCheck className="size-3 text-emerald-500" /> : n.status === 'failed' ? <XCircle className="size-3" /> : <Clock className="size-3" />}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                      return <li key={n.id}>{target ? <Link href={target}>{row}</Link> : row}</li>;
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
           )}
         </Card>
       </div>

@@ -3,6 +3,7 @@ import { Activity } from 'lucide-react';
 import { requireContext } from '@/lib/auth';
 import { activityHref, activityText } from '@/lib/queries';
 import { PageHeader } from '@/components/shell';
+import { ActivityIcon, dayLabel } from '@/components/meta';
 import { Avatar, Badge, Card, CardContent, Empty } from '@/components/ui';
 import { fmtDateTime } from '@/lib/utils';
 
@@ -19,33 +20,48 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="animate-in">
-      <PageHeader title="Activity" description="Audit trail of everything that happened in this workspace." />
-      <div className="mb-3 flex gap-1.5">
+      <PageHeader title="Activity" description="Everything that happened in this workspace, newest first." />
+      <div className="mb-4 flex items-center gap-1 border-b">
         {types.map(([k, l]) => (
-          <Link key={k} href={k ? `/activity?type=${k}` : '/activity'}><Badge tone={(type ?? '') === k ? 'teal' : 'neutral'} className="cursor-pointer px-2 py-1 text-xs">{l}</Badge></Link>
+          <Link key={k} href={k ? `/activity?type=${k}` : '/activity'}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm ${(type ?? '') === k ? 'border-primary font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+            {l}
+          </Link>
         ))}
       </div>
       <Card>
-        <CardContent className="p-0">
-          {rows.length === 0 ? (
-            <div className="p-4"><Empty title="No activity yet" icon={<Activity />} /></div>
-          ) : (
-            <ul className="divide-y">
-              {rows.map((a) => {
-                const href = activityHref(a);
-                return (
-                  <li key={a.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                    <Avatar name={a.actor?.full_name} />
-                    <span className="flex-1">
-                      <span className="font-medium">{a.actor?.full_name ?? 'System'}</span> {href ? <Link href={href} className="hover:underline">{activityText(a)}</Link> : activityText(a)}
-                    </span>
-                    <span className="whitespace-nowrap text-xs text-muted-foreground">{fmtDateTime(a.created_at)}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
+        {rows.length === 0 ? (
+          <div className="p-6"><Empty title="No activity yet" icon={<Activity />} /></div>
+        ) : (
+          Object.entries(
+            rows.reduce<Record<string, typeof rows>>((acc, a) => {
+              (acc[dayLabel(a.created_at)] ??= []).push(a);
+              return acc;
+            }, {}),
+          ).map(([day, list]) => (
+            <div key={day}>
+              <p className="border-b bg-muted/30 px-5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground first:rounded-t-lg">{day}</p>
+              <ul className="divide-y">
+                {list.map((a) => {
+                  const href = activityHref(a);
+                  return (
+                    <li key={a.id} className="flex items-center gap-3 px-5 py-2.5">
+                      <ActivityIcon action={a.action} />
+                      <p className="min-w-0 flex-1 truncate text-sm">
+                        <span className="font-medium">{a.actor?.full_name ?? 'System'}</span>{' '}
+                        {href ? <Link href={href} className="text-muted-foreground hover:text-foreground hover:underline">{activityText(a)}</Link> : <span className="text-muted-foreground">{activityText(a)}</span>}
+                      </p>
+                      <Avatar name={a.actor?.full_name} className="size-5 text-[9px]" />
+                      <span className="w-16 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
+                        {new Date(a.created_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' })}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))
+        )}
       </Card>
     </div>
   );

@@ -1,13 +1,14 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowRightLeft, FileText, Gavel, Sparkles } from 'lucide-react';
+import { ArrowRightLeft, CalendarDays, CheckSquare, Clock, FileText, Gavel, ListOrdered, Sparkles, UserRound, Users } from 'lucide-react';
 import { requireContext } from '@/lib/auth';
 import { can } from '@/lib/rbac';
 import { getMembers, TASK_SELECT, type TaskRow } from '@/lib/queries';
-import { PageHeader } from '@/components/shell';
-import { Avatar, Badge, Card, CardContent, CardDescription, CardHeader, CardTitle, Empty } from '@/components/ui';
-import { MeetingStatusBadge, OverdueBadge, PriorityBadge, StatusBadge } from '@/components/badges';
-import { fmtDate, fmtDateTime } from '@/lib/utils';
+import { Avatar, Badge, Card, buttonVariants } from '@/components/ui';
+import { MeetingStatusBadge } from '@/components/badges';
+import { Meta, SectionHeader } from '@/components/meta';
+import { StatusIcon } from '@/components/task-icons';
+import { cn, fmtDate, isOverdue } from '@/lib/utils';
 import { AttendanceEditor, AiExtractPanel, CarryForwardPanel, MeetingStatusControl, NotesEditor } from './meeting-client';
 
 export default async function MeetingPage({ params }: { params: Promise<{ id: string }> }) {
@@ -39,39 +40,61 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   const isEditor = can(ctx.role, 'meeting.edit');
   const carryCandidates = (openTasks ?? []).filter((t) => !linkedIds.has(t.id));
 
+  const TZ = 'Asia/Kolkata';
+  const when = new Date(meeting.scheduled_at);
+  const agendaItems = (meeting.agenda ?? '').split(/\n+/).map((l: string) => l.replace(/^\s*(\d+[.)]|[-*•])\s*/, '').trim()).filter(Boolean);
+  const attended = parts.filter((p) => p.attended).length;
+  const creator = (meeting.creator as unknown as { full_name: string } | null)?.full_name ?? 'unknown';
+
   return (
-    <div className="animate-in">
-      <PageHeader
-        title={meeting.title}
-        description={`${fmtDateTime(meeting.scheduled_at)} · created by ${(meeting.creator as { full_name: string } | null)?.full_name ?? 'unknown'}`}
-        actions={
-          <>
-            <MeetingStatusBadge status={meeting.status} />
-            {isEditor && <MeetingStatusControl meetingId={id} status={meeting.status} />}
-          </>
-        }
-      />
+    <div className="animate-in space-y-5">
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="mb-1.5 flex items-center gap-2"><MeetingStatusBadge status={meeting.status} /></div>
+          <h1 className="text-xl font-semibold tracking-tight">{meeting.title}</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <Meta icon={CalendarDays}>{when.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: TZ })}</Meta>
+            <Meta icon={Clock}>{when.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: TZ })}</Meta>
+            <Meta icon={Users}>{meeting.status === 'completed' ? `${attended}/${parts.length} attended` : `${parts.length} invited`}</Meta>
+            <Meta icon={CheckSquare}>{tasks.length} task{tasks.length === 1 ? '' : 's'}</Meta>
+            <Meta icon={UserRound}>by {creator}</Meta>
+          </div>
+        </div>
+        {isEditor && <MeetingStatusControl meetingId={id} status={meeting.status} />}
+      </div>
 
       {meeting.status === 'completed' && me && !me.attended && (
-        <Card className="mb-4 flex items-center justify-between border-indigo-500/30 bg-indigo-500/5 p-3 text-sm">
-          <span className="flex items-center gap-2"><Sparkles className="size-4 text-indigo-500" /> You missed this meeting.</span>
-          <Link href={`/briefs?meeting=${id}`} className="font-medium text-indigo-600 hover:underline dark:text-indigo-400">Generate my catch-up brief →</Link>
-        </Card>
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-indigo-500/25 bg-indigo-500/[0.06] px-4 py-3">
+          <Sparkles className="size-4 text-indigo-500" />
+          <p className="flex-1 text-sm">You missed this meeting.</p>
+          <Link href={`/briefs?meeting=${id}`} className={buttonVariants({ size: 'sm', variant: 'secondary' })}>Catch me up</Link>
+        </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
-          {meeting.agenda && (
+      <div className="grid gap-5 lg:grid-cols-3">
+        <div className="space-y-5 lg:col-span-2">
+          {(agendaItems.length > 0 || meeting.summary) && (
             <Card>
-              <CardHeader><CardTitle>Agenda</CardTitle></CardHeader>
-              <CardContent><p className="whitespace-pre-wrap text-sm text-muted-foreground">{meeting.agenda}</p></CardContent>
-            </Card>
-          )}
-
-          {meeting.summary && (
-            <Card>
-              <CardHeader><CardTitle>Summary</CardTitle></CardHeader>
-              <CardContent><p className="text-sm leading-relaxed">{meeting.summary}</p></CardContent>
+              {meeting.summary && (
+                <div className="border-b px-5 py-4">
+                  <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground"><Sparkles className="size-3.5 text-indigo-500" /> Summary</p>
+                  <p className="text-sm leading-relaxed">{meeting.summary}</p>
+                </div>
+              )}
+              {agendaItems.length > 0 && (
+                <div className="px-5 py-4">
+                  <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground"><ListOrdered className="size-3.5" /> Agenda</p>
+                  <ol className="space-y-1.5">
+                    {agendaItems.map((a: string, i: number) => (
+                      <li key={i} className="flex items-start gap-2.5 text-sm">
+                        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">{i + 1}</span>
+                        <span className="pt-px">{a}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
             </Card>
           )}
 
@@ -87,58 +110,55 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
           )}
 
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-1.5"><Gavel className="size-4 text-muted-foreground" /> Decisions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {(decisions ?? []).length === 0 ? (
-                <p className="text-sm text-muted-foreground">No decisions recorded yet.</p>
-              ) : (
-                <ul className="space-y-2.5">
-                  {(decisions ?? []).map((d) => (
-                    <li key={d.id} className="rounded-md border p-2.5">
-                      <p className="flex items-center gap-2 text-sm font-medium">{d.title} {d.ai_generated && <Badge tone="indigo">AI · approved</Badge>}</p>
-                      {d.description && <p className="mt-0.5 text-xs text-muted-foreground">{d.description}</p>}
-                      {d.rationale && <p className="mt-1 text-xs"><span className="text-muted-foreground">Why: </span>{d.rationale}</p>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
+            <SectionHeader icon={Gavel} title="Decisions" count={(decisions ?? []).length} />
+            {(decisions ?? []).length === 0 ? (
+              <p className="px-5 py-4 text-sm text-muted-foreground">No decisions yet — use AI extraction on the notes.</p>
+            ) : (
+              <ul className="divide-y">
+                {(decisions ?? []).map((d) => (
+                  <li key={d.id} className="flex gap-3 px-5 py-3">
+                    <span className="mt-1.5 size-2 shrink-0 rounded-full bg-indigo-500" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{d.title}</p>
+                      {d.rationale && <p className="mt-0.5 text-xs text-muted-foreground">Why: {d.rationale}</p>}
+                    </div>
+                    {d.ai_generated && <Badge tone="indigo" className="h-fit shrink-0"><Sparkles className="size-3" /> AI</Badge>}
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
 
           <Card>
-            <CardHeader>
-              <div>
-                <CardTitle>Action items</CardTitle>
-                <CardDescription>Created in this meeting or carried forward into it.</CardDescription>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {tasks.length === 0 ? (
-                <Empty title="No action items yet">Run AI extraction on the notes, or carry forward unresolved tasks.</Empty>
-              ) : (
-                <ul className="divide-y">
-                  {tasks.map(({ task, is_carried_forward }) => (
-                    <li key={task!.id} className="flex flex-wrap items-center gap-2 py-2">
-                      <Link href={`/tasks/${task!.id}`} className="min-w-0 flex-1 truncate text-sm hover:underline">{task!.title}</Link>
-                      {is_carried_forward && <Badge tone="amber"><ArrowRightLeft className="size-3" /> carried from {task!.meeting?.title ? `"${task!.meeting.title}"` : 'earlier'}</Badge>}
-                      <OverdueBadge due={task!.due_date} status={task!.status} />
-                      <PriorityBadge priority={task!.priority} />
-                      <StatusBadge status={task!.status} />
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Avatar name={task!.assignee?.full_name ?? 'Unassigned'} className="size-5 text-[9px]" />
-                        {task!.assignee?.full_name ?? 'Unassigned'} · {fmtDate(task!.due_date)}
+            <SectionHeader icon={CheckSquare} title="Tasks" count={tasks.length} />
+            {tasks.length === 0 ? (
+              <p className="px-5 py-4 text-sm text-muted-foreground">No tasks yet — extract them from the notes or carry unresolved ones forward.</p>
+            ) : (
+              <ul className="divide-y">
+                {tasks.map(({ task, is_carried_forward }) => {
+                  const t = task!;
+                  const late = isOverdue(t.due_date, t.status);
+                  return (
+                    <li key={t.id} className="flex items-center gap-3 px-5 py-2.5">
+                      <StatusIcon status={t.status} />
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/tasks/${t.id}`} className={cn('block truncate text-sm font-medium hover:underline', t.status === 'done' && 'text-muted-foreground line-through')}>{t.title}</Link>
+                        {is_carried_forward && <Meta icon={ArrowRightLeft} className="text-amber-600 dark:text-amber-400">carried from {t.meeting?.title ?? 'an earlier meeting'}</Meta>}
+                      </div>
+                      <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                        <Avatar name={t.assignee?.full_name ?? '?'} className={cn('size-5 text-[9px]', !t.assignee && 'opacity-30')} />
+                        <span className="hidden sm:inline">{t.assignee?.full_name.split(' ')[0] ?? 'No owner'}</span>
                       </span>
+                      <span className={cn('w-16 shrink-0 text-right text-xs tabular-nums', late ? 'font-medium text-red-600 dark:text-red-400' : 'text-muted-foreground')}>{t.due_date ? fmtDate(t.due_date).replace(/ \d{4}$/, '') : '—'}</span>
                     </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
+                  );
+                })}
+              </ul>
+            )}
           </Card>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-5">
           <AttendanceEditor meetingId={id} participants={parts} members={members.map((m) => ({ id: m.user_id, name: m.full_name }))} canEdit={isEditor} completed={meeting.status === 'completed'} />
 
           {can(ctx.role, 'meeting.carry_forward') && meeting.status !== 'completed' && meeting.status !== 'cancelled' && (
@@ -146,21 +166,21 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
           )}
 
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-1.5"><FileText className="size-4 text-muted-foreground" /> Linked documents</CardTitle></CardHeader>
-            <CardContent>
-              {docs.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No documents linked. Use “Suggest links” on a document in the Knowledge Base.</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {docs.map((d) => (
-                    <li key={d.document!.id} className="text-sm">
-                      <Link href={`/knowledge/${d.document!.id}`} className="hover:underline">{d.document!.title}</Link>
-                      {d.reason && <p className="text-xs text-muted-foreground">{d.reason}</p>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
+            <SectionHeader icon={FileText} title="Documents" count={docs.length} />
+            {docs.length === 0 ? (
+              <p className="px-5 py-4 text-xs text-muted-foreground">None linked yet.</p>
+            ) : (
+              <ul className="divide-y">
+                {docs.map((d) => (
+                  <li key={d.document!.id}>
+                    <Link href={`/knowledge/${d.document!.id}`} className="flex items-center gap-2.5 px-5 py-2.5 text-sm hover:bg-accent/50">
+                      <FileText className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{d.document!.title}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
         </div>
       </div>

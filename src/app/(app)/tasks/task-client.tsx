@@ -1,7 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, MessageSquare, Plus } from 'lucide-react';
+import { CheckCircle2, MessageSquare, Plus, SlidersHorizontal } from 'lucide-react';
+import { SectionHeader } from '@/components/meta';
 import { toast } from 'sonner';
 import { api } from '@/lib/client-api';
 import { Button, Card, CardContent, CardHeader, CardTitle, Dialog, Field, Input, Select, Textarea } from '@/components/ui';
@@ -111,8 +112,8 @@ export function TaskActions({ task, members, canManage, canReassign }: { task: T
 
   return (
     <Card>
-      <CardHeader><CardTitle>Update</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
+      <SectionHeader icon={SlidersHorizontal} title="Edit task" />
+      <CardContent className="space-y-3 p-5">
         <Field label="Status">
           <div className="grid grid-cols-3 gap-1">
             {(['todo', 'in_progress', 'blocked'] as const).map((s) => (

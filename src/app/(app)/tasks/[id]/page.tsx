@@ -3,11 +3,13 @@ import { notFound } from 'next/navigation';
 import { requireContext } from '@/lib/auth';
 import { can } from '@/lib/rbac';
 import { getMembers, TASK_SELECT, type TaskRow } from '@/lib/queries';
-import { PageHeader } from '@/components/shell';
-import { Avatar, Badge, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
-import { OverdueBadge, PriorityBadge, STATUS_LABEL, StatusBadge } from '@/components/badges';
+import { Avatar, Card } from '@/components/ui';
 import { Timeline, type TimelineItem } from '@/components/timeline';
-import { fmtDate } from '@/lib/utils';
+import { STATUS_LABEL } from '@/components/badges';
+import { cn, fmtDate, isOverdue } from '@/lib/utils';
+import { AlignLeft, ArrowRight, ArrowRightLeft, CalendarClock, CalendarDays, CheckCircle2, FileText, Flag, Hash, History, Repeat2, Sparkles } from 'lucide-react';
+import { Meta, SectionHeader } from '@/components/meta';
+import { CompleteButton, NextStepButton, StatusPill, TaskRowMenu, type ActionTask } from '@/components/task-actions';
 import { TaskActions } from '../task-client';
 import { TaskBriefCard } from './task-brief';
 import type { TaskBrief } from '@/lib/ai/prompts';
@@ -63,45 +65,60 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
   const isOwner = task.assignee_id === ctx.user.id || task.creator_id === ctx.user.id;
   const canManage = isLead || (can(ctx.role, 'task.update_own') && isOwner);
 
+  const late = isOverdue(task.due_date, task.status);
+  const action: ActionTask = { id: task.id, title: task.title, status: task.status, priority: task.priority, due_date: task.due_date, assignee_id: task.assignee_id };
+  const dueRel = task.due_date ? Math.round((new Date(task.due_date).getTime() - Date.now()) / 86_400_000) : null;
+
   return (
-    <div className="animate-in">
-      <PageHeader
-        title={task.title}
-        description={task.meeting ? `From “${task.meeting.title}”` : 'Standalone task'}
-        actions={
-          <>
-            {task.ai_generated && <Badge tone="indigo">AI-extracted · human-approved</Badge>}
-            <OverdueBadge due={task.due_date} status={task.status} />
-            <PriorityBadge priority={task.priority} />
-            <StatusBadge status={task.status} />
-          </>
-        }
-      />
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
-          <Card>
-            <CardContent className="grid gap-4 p-4 sm:grid-cols-3">
-              <div>
-                <p className="text-xs text-muted-foreground">Owner</p>
-                <p className="mt-1 flex items-center gap-1.5 text-sm font-medium"><Avatar name={task.assignee?.full_name ?? '?'} className="size-5 text-[9px]" />{task.assignee?.full_name ?? 'Unassigned'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Deadline</p>
-                <p className="mt-1 text-sm font-medium">{fmtDate(task.due_date)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Task ID</p>
-                <p className="mt-1 truncate font-mono text-xs">{task.id}</p>
-              </div>
-              {task.description && <p className="whitespace-pre-wrap text-sm text-muted-foreground sm:col-span-3">{task.description}</p>}
-              {task.outcome_notes && (
-                <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 sm:col-span-3">
-                  <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Outcome · closed {fmtDate(task.completed_at)}</p>
-                  <p className="mt-1 text-sm">{task.outcome_notes}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+    <div className="animate-in space-y-5">
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <h1 className={cn('text-xl font-semibold tracking-tight', task.status === 'done' && 'text-muted-foreground line-through decoration-muted-foreground/40')}>{task.title}</h1>
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <StatusPill task={action} editable={canManage} />
+            <span className="flex items-center gap-1.5 text-sm">
+              <Avatar name={task.assignee?.full_name ?? '?'} className={cn('size-5 text-[9px]', !task.assignee && 'opacity-30')} />
+              {task.assignee?.full_name ?? <span className="text-muted-foreground">No owner</span>}
+            </span>
+            <Meta icon={CalendarClock} className={late ? 'font-medium text-red-600 dark:text-red-400' : ''}>
+              {task.due_date ? `${fmtDate(task.due_date).replace(/ \d{4}$/, '')}${task.status !== 'done' && dueRel !== null ? ` · ${late ? `${Math.max(1, -dueRel)}d late` : dueRel === 0 ? 'today' : `in ${dueRel}d`}` : ''}` : 'No deadline'}
+            </Meta>
+            <Meta icon={Flag} className={task.priority === 'urgent' ? 'text-red-600 dark:text-red-400' : task.priority === 'high' ? 'text-amber-600 dark:text-amber-400' : ''}>
+              <span className="capitalize">{task.priority}</span>
+            </Meta>
+            {task.meeting && <Link href={`/meetings/${task.meeting.id}`} className="hover:text-foreground"><Meta icon={CalendarDays}>{task.meeting.title}</Meta></Link>}
+            {task.ai_generated && <Meta icon={Sparkles} className="text-indigo-600 dark:text-indigo-400" title="Extracted by AI, approved by a lead">AI-extracted</Meta>}
+            <Meta icon={Hash} title={task.id}>{task.id.slice(0, 8)}</Meta>
+          </div>
+        </div>
+        {canManage && task.status !== 'done' && (
+          <div className="flex items-center gap-1.5">
+            <NextStepButton task={action} editable={canManage} />
+            {!(task.status === 'in_progress' && !late) && <CompleteButton task={action} variant="default" />}
+            <TaskRowMenu task={action} canEdit={canManage} />
+          </div>
+        )}
+      </div>
+
+      {task.outcome_notes && (
+        <div className="flex gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.06] px-4 py-3">
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-500" />
+          <div>
+            <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Completed {fmtDate(task.completed_at)} · Outcome</p>
+            <p className="mt-0.5 text-sm">{task.outcome_notes}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-5 lg:grid-cols-3">
+        <div className="space-y-5 lg:col-span-2">
+          {task.description && (
+            <Card>
+              <SectionHeader icon={AlignLeft} title="Details" />
+              <p className="whitespace-pre-wrap px-5 py-4 text-sm leading-relaxed text-muted-foreground">{task.description}</p>
+            </Card>
+          )}
           <TaskBriefCard
             taskId={task.id}
             taskTitle={task.title}
@@ -112,11 +129,11 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
             meetingId={task.source_meeting_id}
           />
           <Card>
-            <CardHeader><CardTitle>Complete history</CardTitle></CardHeader>
-            <CardContent><Timeline items={items} /></CardContent>
+            <SectionHeader icon={History} title="History" count={items.length} />
+            <div className="px-5 py-4"><Timeline items={items} /></div>
           </Card>
         </div>
-        <div className="space-y-4">
+        <div className="space-y-5">
           <TaskActions
             task={{ id: task.id, status: task.status, priority: task.priority, due_date: task.due_date, assignee_id: task.assignee_id }}
             members={members.filter((m) => m.role !== 'viewer').map((m) => ({ id: m.user_id, name: m.full_name }))}
@@ -124,41 +141,53 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
             canReassign={isLead || task.assignee_id === ctx.user.id}
           />
           <Card>
-            <CardHeader><CardTitle>Meetings</CardTitle></CardHeader>
-            <CardContent className="space-y-1.5">
-              {meetingLinks.length === 0 && <p className="text-xs text-muted-foreground">Not linked to any meeting.</p>}
-              {meetingLinks.map((l) => (
-                <Link key={l.meeting!.id} href={`/meetings/${l.meeting!.id}`} className="flex items-center justify-between gap-2 rounded p-1 text-sm hover:bg-accent">
-                  <span className="truncate">{l.meeting!.title}</span>
-                  <Badge tone={l.is_carried_forward ? 'amber' : 'neutral'}>{l.is_carried_forward ? 'carried' : 'origin'}</Badge>
-                </Link>
-              ))}
-            </CardContent>
+            <SectionHeader icon={CalendarDays} title="Meetings" count={meetingLinks.length} />
+            {meetingLinks.length === 0 ? <p className="px-5 py-4 text-xs text-muted-foreground">Not linked to a meeting.</p> : (
+              <ul className="divide-y">
+                {meetingLinks.map((l) => (
+                  <li key={l.meeting!.id}>
+                    <Link href={`/meetings/${l.meeting!.id}`} className="flex items-center gap-2.5 px-5 py-2.5 text-sm hover:bg-accent/50">
+                      {l.is_carried_forward ? <ArrowRightLeft className="size-4 shrink-0 text-amber-500" /> : <CalendarDays className="size-4 shrink-0 text-indigo-500" />}
+                      <span className="min-w-0 flex-1 truncate">{l.meeting!.title}</span>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">{l.is_carried_forward ? 'carried in' : 'origin'}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
           {hos.length > 0 && (
             <Card>
-              <CardHeader><CardTitle>Handovers</CardTitle></CardHeader>
-              <CardContent className="space-y-1.5">
+              <SectionHeader icon={Repeat2} title="Handovers" count={hos.length} />
+              <ul className="divide-y">
                 {hos.map((h) => (
-                  <Link key={h.handover!.id} href={`/handovers/${h.handover!.id}`} className="block rounded p-1 text-sm hover:bg-accent">
-                    {h.handover!.outgoing?.full_name} → {h.handover!.incoming?.full_name}
-                    <span className="block text-xs text-muted-foreground">{fmtDate(h.handover!.completed_at)} · view AI brief</span>
-                  </Link>
+                  <li key={h.handover!.id}>
+                    <Link href={`/handovers/${h.handover!.id}`} className="flex items-center gap-2 px-5 py-2.5 text-sm hover:bg-accent/50">
+                      <Avatar name={h.handover!.outgoing?.full_name} className="size-5 text-[9px]" />
+                      <ArrowRight className="size-3.5 text-muted-foreground" />
+                      <Avatar name={h.handover!.incoming?.full_name} className="size-5 text-[9px]" />
+                      <span className="min-w-0 flex-1 truncate">{h.handover!.incoming?.full_name}</span>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">{fmtDate(h.handover!.completed_at).replace(/ \d{4}$/, '')}</span>
+                    </Link>
+                  </li>
                 ))}
-              </CardContent>
+              </ul>
             </Card>
           )}
           <Card>
-            <CardHeader><CardTitle>Linked documents</CardTitle></CardHeader>
-            <CardContent className="space-y-1.5">
-              {docs.length === 0 && <p className="text-xs text-muted-foreground">None yet.</p>}
-              {docs.map((d) => (
-                <div key={d.document!.id} className="text-sm">
-                  <Link href={`/knowledge/${d.document!.id}`} className="hover:underline">{d.document!.title}</Link>
-                  {d.reason && <p className="text-xs text-muted-foreground">{d.reason}</p>}
-                </div>
-              ))}
-            </CardContent>
+            <SectionHeader icon={FileText} title="Documents" count={docs.length} />
+            {docs.length === 0 ? <p className="px-5 py-4 text-xs text-muted-foreground">None linked yet.</p> : (
+              <ul className="divide-y">
+                {docs.map((d) => (
+                  <li key={d.document!.id}>
+                    <Link href={`/knowledge/${d.document!.id}`} className="flex items-center gap-2.5 px-5 py-2.5 text-sm hover:bg-accent/50">
+                      <FileText className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{d.document!.title}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
         </div>
       </div>

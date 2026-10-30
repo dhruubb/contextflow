@@ -1,13 +1,13 @@
 import Link from 'next/link';
-import { BookOpen, CalendarDays, FileText, Search } from 'lucide-react';
+import { AlertTriangle, BookOpen, CalendarDays, CheckCircle2, Clock, FileSearch, Link2, Loader2, Search, Sparkles } from 'lucide-react';
 import { requireContext } from '@/lib/auth';
 import { can } from '@/lib/rbac';
 import { PageHeader } from '@/components/shell';
-import { Button, Card, CardContent, CardHeader, CardTitle, Empty, Input, Table } from '@/components/ui';
-import { fmtDate } from '@/lib/utils';
+import { Avatar, Button, Card, Empty, Input } from '@/components/ui';
+import { FileTypeIcon, Meta, SectionHeader } from '@/components/meta';
+import { fmtDate, relTime } from '@/lib/utils';
 import { UploadButton } from './upload';
 import { AskPanel } from './ask-panel';
-import { Badge } from '@/components/ui';
 
 export const metadata = { title: 'Knowledge Base' };
 
@@ -39,65 +39,83 @@ export default async function KnowledgePage({ searchParams }: { searchParams: Pr
   type Doc = { id: string; title: string; file_name: string; file_type: string; file_size: number; created_at: string; extracted_text: string | null; uploader: { full_name: string } | null; knowledge_links: { id: string }[]; status: string; chunk_count: number; embedding_model: string | null; error_message: string | null };
   const rows = (docs ?? []) as unknown as Doc[];
 
-  return (
-    <div className="animate-in">
-      <PageHeader title="Knowledge Base" description="PDF, DOCX and TXT documents with searchable text, linked to the work they support." actions={can(ctx.role, 'document.upload') && <UploadButton />} />
-      <div className="mb-4"><AskPanel /></div>
-      <form className="mb-4 flex max-w-lg gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-          <Input name="q" defaultValue={term} placeholder="Search documents and past meetings…" className="pl-8" />
-        </div>
-        <Button type="submit" variant="outline">Search</Button>
-      </form>
+  const Status = ({ d }: { d: Doc }) =>
+    d.status === 'ready' ? (
+      <Meta icon={CheckCircle2} className="text-emerald-600 dark:text-emerald-400" title={d.error_message ?? `${d.chunk_count} searchable sections`}>Searchable</Meta>
+    ) : d.status === 'failed' ? (
+      <Meta icon={AlertTriangle} className="text-red-600 dark:text-red-400" title={d.error_message ?? undefined}>Needs re-index</Meta>
+    ) : (
+      <Meta icon={Loader2} className="text-indigo-600 dark:text-indigo-400">Indexing…</Meta>
+    );
 
-      {term && (
-        <Card className="mb-4">
-          <CardHeader><CardTitle className="flex items-center gap-1.5"><CalendarDays className="size-4 text-muted-foreground" /> Meetings matching “{term}”</CardTitle></CardHeader>
-          <CardContent>
+  return (
+    <div className="animate-in space-y-5">
+      <PageHeader title="Knowledge Base" description="Your team’s documents — searchable, and answerable by AI." actions={can(ctx.role, 'document.upload') && <UploadButton />} />
+      <AskPanel />
+
+      <Card>
+        <SectionHeader
+          icon={BookOpen}
+          title="Documents"
+          count={rows.length}
+          action={
+            <form className="flex items-center gap-1.5">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2 size-4 text-muted-foreground" />
+                <Input name="q" defaultValue={term} placeholder="Search documents & meetings" className="h-8 w-60 pl-8 text-sm" />
+              </div>
+              <Button type="submit" size="sm" variant="ghost">Search</Button>
+            </form>
+          }
+        />
+        {term && (
+          <div className="border-b bg-muted/20 px-5 py-3">
+            <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground"><CalendarDays className="size-3.5" /> Meetings mentioning “{term}”</p>
             {(meetings ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">No meetings match.</p>
+              <p className="text-xs text-muted-foreground">None.</p>
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-1.5">
                 {(meetings ?? []).map((m) => (
                   <li key={m.id}>
                     <Link href={`/meetings/${m.id}`} className="text-sm font-medium hover:underline">{m.title}</Link>
-                    <span className="text-xs text-muted-foreground"> · {fmtDate(m.scheduled_at)}</span>
-                    <p className="text-xs text-muted-foreground">{snippet(m.summary || m.raw_notes, term)}</p>
+                    <span className="ml-2 text-xs text-muted-foreground">{fmtDate(m.scheduled_at)}</span>
+                    <p className="line-clamp-1 text-xs text-muted-foreground">{snippet(m.summary || m.raw_notes, term)}</p>
                   </li>
                 ))}
               </ul>
             )}
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
+          </div>
+        )}
         {rows.length === 0 ? (
-          <div className="p-4"><Empty title={term ? 'No documents match' : 'No documents yet'} icon={<BookOpen />}>Upload runbooks, specs, policies or client documents (max 5 MB).</Empty></div>
+          <div className="p-6"><Empty title={term ? 'No documents match' : 'No documents yet'} icon={<FileSearch />}>Upload runbooks, specs, policies or client documents (PDF, DOCX, TXT · max 5 MB).</Empty></div>
         ) : (
-          <Table>
-            <thead><tr><th>Document</th><th>Index</th><th>Type</th><th>Size</th><th>Links</th><th>Uploaded</th></tr></thead>
-            <tbody>
-              {rows.map((d) => (
-                <tr key={d.id}>
-                  <td className="max-w-md">
-                    <Link href={`/knowledge/${d.id}`} className="flex items-center gap-1.5 font-medium hover:underline"><FileText className="size-4 text-muted-foreground" />{d.title}</Link>
-                    {term ? <p className="text-xs text-muted-foreground">{snippet(d.extracted_text, term)}</p> : <p className="text-xs text-muted-foreground">{d.file_name}{!d.extracted_text && ' · no searchable text'}</p>}
-                  </td>
-                  <td className="whitespace-nowrap">
-                    <Badge tone={d.status === 'ready' ? 'green' : d.status === 'failed' ? 'red' : 'indigo'} title={d.error_message ?? undefined}>
-                      {d.status === 'ready' ? `${d.chunk_count} chunks${d.embedding_model ? ' · vectors' : ''}` : d.status}
-                    </Badge>
-                  </td>
-                  <td className="text-xs uppercase text-muted-foreground">{d.file_name.split('.').pop()}</td>
-                  <td className="text-xs text-muted-foreground">{(d.file_size / 1024).toFixed(0)} KB</td>
-                  <td className="text-xs text-muted-foreground">{d.knowledge_links.length}</td>
-                  <td className="whitespace-nowrap text-xs text-muted-foreground">{fmtDate(d.created_at)} · {d.uploader?.full_name}</td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+          <ul className="divide-y">
+            {rows.map((d) => (
+              <li key={d.id}>
+                <Link href={`/knowledge/${d.id}`} className="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-accent/40">
+                  <FileTypeIcon name={d.file_name} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{d.title}</p>
+                    {term ? (
+                      <p className="line-clamp-1 text-xs text-muted-foreground">{snippet(d.extracted_text, term)}</p>
+                    ) : (
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3.5 gap-y-1">
+                        <Status d={d} />
+                        {d.knowledge_links.length > 0 && <Meta icon={Link2}>{d.knowledge_links.length} linked</Meta>}
+                        {d.embedding_model && <Meta icon={Sparkles}>vectors</Meta>}
+                        <Meta icon={Clock}>{relTime(d.created_at)}</Meta>
+                      </div>
+                    )}
+                  </div>
+                  <span className="hidden shrink-0 items-center gap-1.5 text-xs text-muted-foreground sm:flex">
+                    <Avatar name={d.uploader?.full_name} className="size-5 text-[9px]" />
+                    {d.uploader?.full_name?.split(' ')[0]}
+                  </span>
+                  <span className="w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{(d.file_size / 1024).toFixed(0)} KB</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         )}
       </Card>
     </div>
