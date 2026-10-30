@@ -1,0 +1,3 @@
+-- Demo data is seeded by `npm run seed` (src/scripts/seed.ts), not by SQL.
+-- The seed needs the Supabase Auth Admin API to create real, log-in-able demo users,
+-- which plain SQL cannot do safely. Apply both files in supabase/migrations/ first.
