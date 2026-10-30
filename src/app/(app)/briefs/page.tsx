@@ -18,7 +18,7 @@ export default async function BriefsPage({ searchParams }: { searchParams: Promi
   const [{ data: parts }, { data: completed }, { data: past }, { data: received }] = await Promise.all([
     ctx.supabase.from('meeting_participants').select('attended,meeting:meetings!inner(id,title,scheduled_at,status,workspace_id)').eq('user_id', ctx.user.id).eq('meeting.workspace_id', ctx.workspace.id).eq('meeting.status', 'completed'),
     ctx.supabase.from('meetings').select('id,title,scheduled_at').eq('workspace_id', ctx.workspace.id).eq('status', 'completed').order('scheduled_at', { ascending: false }).limit(30),
-    ctx.supabase.from('ai_generations').select('id,parsed_output,created_at,target_id').eq('workspace_id', ctx.workspace.id).eq('generation_type', 'catch_up_brief').eq('status', 'success').eq('created_by', ctx.user.id).order('created_at', { ascending: false }).limit(10),
+    ctx.supabase.from('ai_generations').select('id,parsed_output,created_at,target_id').eq('workspace_id', ctx.workspace.id).eq('generation_type', 'catch_up_brief').eq('target_type', 'meeting').eq('status', 'success').eq('created_by', ctx.user.id).order('created_at', { ascending: false }).limit(10),
     ctx.supabase.from('handovers').select('id,completed_at,outgoing:profiles!handovers_outgoing_user_id_fkey(full_name),handover_items(id)').eq('workspace_id', ctx.workspace.id).eq('incoming_user_id', ctx.user.id).order('created_at', { ascending: false }).limit(5),
   ]);
   const missed = ((parts ?? []) as unknown as { attended: boolean; meeting: { id: string; title: string; scheduled_at: string } }[]).filter((p) => !p.attended).map((p) => p.meeting);

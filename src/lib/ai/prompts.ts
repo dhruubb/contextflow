@@ -214,3 +214,29 @@ JSON shape: {"relevant": [{"id": string, "score": number}]}`,
     user: JSON.stringify({ question, passages: candidates }),
   };
 }
+
+// ---------------------------------------------------------------------------
+// 7. Task brief (on the task page)
+// ---------------------------------------------------------------------------
+export const TaskBriefZ = z.object({
+  summary: str.min(1),
+  where_it_stands: str.min(1),
+  next_steps: strList,
+  risks: strList,
+  open_questions: strList,
+});
+export type TaskBrief = z.infer<typeof TaskBriefZ>;
+
+export function taskBriefPrompt(input: unknown) {
+  return {
+    system: `You brief a teammate on ONE task so they understand it in 30 seconds.
+Write in simple, plain English with short sentences. Use only facts from the input; never invent names, dates or numbers. Never print ids.
+- summary: 1-2 sentences — what the task is and why it exists (the meeting/decision it came from).
+- where_it_stands: 1-2 sentences — current status, owner, deadline (write dates like "31 Oct"), and any blocker.
+- next_steps: max 4 concrete actions, each a short imperative task title (max 10 words, no dates).
+- risks: max 3 short items (empty if none).
+- open_questions: max 3 short items (empty if none).
+JSON shape: {"summary": string, "where_it_stands": string, "next_steps": [string], "risks": [string], "open_questions": [string]}`,
+    user: JSON.stringify(input),
+  };
+}

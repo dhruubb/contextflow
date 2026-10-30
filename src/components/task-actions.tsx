@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/client-api';
 import { Button, Dialog, Field, Input, Textarea } from '@/components/ui';
 import { cn, toDateInput } from '@/lib/utils';
+import { StatusIcon } from '@/components/task-icons';
 
 export interface ActionTask {
   id: string;
@@ -79,15 +80,18 @@ const STATUS = [
   { v: 'done', label: 'Done', cls: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
 ];
 
-export function StatusPill({ task, editable }: { task: ActionTask; editable: boolean }) {
+export function StatusPill({ task, editable, iconOnly }: { task: ActionTask; editable: boolean; iconOnly?: boolean }) {
   const { patch, busy } = useTaskPatch();
   const [closing, setClosing] = useState(false);
   const [blocking, setBlocking] = useState(false);
   const s = STATUS.find((x) => x.v === task.status) ?? STATUS[0];
   const pill = (
-    <span className={cn('inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium leading-none', s.cls, editable && 'cursor-pointer hover:brightness-110', busy && 'opacity-60')}>
-      {s.label}
-      {editable && <ChevronDown className="size-3" />}
+    <span
+      title={editable ? `${s.label} — click to change` : s.label}
+      className={cn('inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-muted-foreground', editable && 'cursor-pointer hover:bg-accent hover:text-foreground', busy && 'opacity-50')}
+    >
+      <StatusIcon status={task.status} />
+      {!iconOnly && <span className="whitespace-nowrap">{s.label}</span>}
     </span>
   );
   if (!editable) return pill;
@@ -98,7 +102,7 @@ export function StatusPill({ task, editable }: { task: ActionTask; editable: boo
           STATUS.map((o) => (
             <MenuItem
               key={o.v}
-              icon={o.v === task.status ? <Check /> : <span className="size-3.5" />}
+              icon={<StatusIcon status={o.v} className="!text-current" />}
               onClick={() => {
                 close();
                 if (o.v === task.status) return;
@@ -159,7 +163,7 @@ export function OwnerPicker({ task, members, editable, compact, primary }: { tas
   const { patch, busy } = useTaskPatch();
   const current = members.find((m) => m.id === task.assignee_id);
   const label = current?.name ?? 'Unassigned';
-  if (!editable) return <span className={cn('text-xs', !current && 'text-amber-600 dark:text-amber-400')}>{label}</span>;
+  if (!editable) return <span className={cn('px-1 text-sm', !current && 'text-muted-foreground')}>{label}</span>;
   return (
     <Menu
       align="left"
@@ -167,8 +171,8 @@ export function OwnerPicker({ task, members, editable, compact, primary }: { tas
         compact ? (
           <Button size="sm" variant={primary ?? !current ? 'default' : 'outline'} loading={!!busy}><UserPlus /> {current ? 'Reassign' : 'Assign owner'}</Button>
         ) : (
-          <button className={cn('inline-flex items-center gap-1 rounded px-1 py-0.5 text-xs hover:bg-accent', !current && 'text-amber-600 dark:text-amber-400', busy && 'opacity-60')}>
-            {label} <ChevronDown className="size-3 text-muted-foreground" />
+          <button className={cn('group/owner inline-flex items-center gap-1 rounded px-1 py-0.5 text-sm hover:bg-accent', !current && 'text-muted-foreground', busy && 'opacity-60')}>
+            {label} <ChevronDown className="size-3 text-muted-foreground opacity-0 transition-opacity group-hover/owner:opacity-100" />
           </button>
         )
       }
@@ -346,5 +350,58 @@ export function CarryButton({ meetingId, taskIds, label = 'Add to next meeting',
     >
       <ArrowRightLeft /> {label}
     </Button>
+  );
+}
+
+/* --------------------------------------------------------------- row completion checkbox */
+export function CompleteCheck({ task, editable }: { task: ActionTask; editable: boolean }) {
+  const { patch, busy } = useTaskPatch();
+  const [open, setOpen] = useState(false);
+  const done = task.status === 'done';
+  return (
+    <>
+      <button
+        type="button"
+        disabled={!editable || !!busy}
+        title={done ? (editable ? 'Completed — click to reopen' : 'Completed') : editable ? 'Mark as complete' : 'Only the owner or a lead can complete this'}
+        onClick={() => (done ? patch(task.id, { status: 'todo', note: 'Reopened' }, 'Task reopened') : setOpen(true))}
+        className={cn(
+          'group/check flex size-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors',
+          done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-muted-foreground/40',
+          editable && !done && 'hover:border-emerald-500 hover:bg-emerald-500/10',
+          !editable && 'cursor-default opacity-50',
+        )}
+      >
+        <Check className={cn('size-3', done ? 'opacity-100' : 'text-emerald-500 opacity-0', editable && !done && 'group-hover/check:opacity-100')} strokeWidth={3} />
+      </button>
+      <CompleteDialog task={task} open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+/* --------------------------------------------------------------- single, obvious next step */
+export function NextStepButton({ task, editable }: { task: ActionTask; editable: boolean }) {
+  const { patch, busy } = useTaskPatch();
+  const [dialog, setDialog] = useState<'complete' | 'deadline' | null>(null);
+  if (!editable || task.status === 'done') return null;
+  const overdue = !!task.due_date && new Date(task.due_date).getTime() < Date.now();
+  const btn = 'h-7 gap-1 px-2.5 text-xs';
+
+  let el: React.ReactNode;
+  if (task.status === 'blocked')
+    el = <Button size="sm" variant="outline" className={btn} loading={!!busy} onClick={() => patch(task.id, { status: 'in_progress', note: 'Blocker cleared' }, 'Blocker cleared — back In Progress')}><Play /> Resume</Button>;
+  else if (overdue)
+    el = <Button size="sm" variant="outline" className={cn(btn, 'border-red-500/40 text-red-600 hover:bg-red-500/10 dark:text-red-400')} onClick={() => setDialog('deadline')}><CalendarClock /> New date</Button>;
+  else if (task.status === 'todo')
+    el = <Button size="sm" variant="outline" className={btn} loading={!!busy} onClick={() => patch(task.id, { status: 'in_progress' }, 'Started')}><Play /> Start</Button>;
+  else
+    el = <Button size="sm" variant="outline" className={cn(btn, 'border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400')} onClick={() => setDialog('complete')}><CheckCircle2 /> Complete</Button>;
+
+  return (
+    <>
+      {el}
+      <CompleteDialog task={task} open={dialog === 'complete'} onClose={() => setDialog(null)} />
+      {dialog === 'deadline' && <DeadlineDialog task={task} open onClose={() => setDialog(null)} />}
+    </>
   );
 }

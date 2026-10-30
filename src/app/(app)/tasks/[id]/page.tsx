@@ -9,6 +9,8 @@ import { OverdueBadge, PriorityBadge, STATUS_LABEL, StatusBadge } from '@/compon
 import { Timeline, type TimelineItem } from '@/components/timeline';
 import { fmtDate } from '@/lib/utils';
 import { TaskActions } from '../task-client';
+import { TaskBriefCard } from './task-brief';
+import type { TaskBrief } from '@/lib/ai/prompts';
 
 export default async function TaskPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -17,7 +19,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
   if (!data) notFound();
   const task = data as unknown as TaskRow;
 
-  const [{ data: events }, { data: links }, { data: handovers }, { data: docLinks }, members, { data: decisions }, { data: srcMeeting }] = await Promise.all([
+  const [{ data: events }, { data: links }, { data: handovers }, { data: docLinks }, members, { data: decisions }, { data: srcMeeting }, { data: lastBrief }] = await Promise.all([
     ctx.supabase.from('task_events').select('event_type,previous_value,new_value,notes,created_at,actor:profiles(full_name)').eq('task_id', id).order('created_at'),
     ctx.supabase.from('meeting_action_items').select('is_carried_forward,created_at,meeting:meetings(id,title,scheduled_at,status)').eq('action_item_id', id),
     ctx.supabase.from('handover_items').select('created_at,handover:handovers(id,completed_at,ai_summary,outgoing:profiles!handovers_outgoing_user_id_fkey(full_name),incoming:profiles!handovers_incoming_user_id_fkey(full_name))').eq('action_item_id', id),
@@ -25,7 +27,9 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
     getMembers(ctx),
     task.source_meeting_id ? ctx.supabase.from('decisions').select('id,title,rationale,created_at').eq('meeting_id', task.source_meeting_id) : Promise.resolve({ data: [] as { id: string; title: string; rationale: string | null; created_at: string }[] }),
     task.source_meeting_id ? ctx.supabase.from('meetings').select('id,title,scheduled_at').eq('id', task.source_meeting_id).maybeSingle() : Promise.resolve({ data: null }),
+    ctx.supabase.from('ai_generations').select('parsed_output,created_at').eq('target_type', 'action_item').eq('target_id', id).eq('status', 'success').not('parsed_output', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ]);
+  const briefData = lastBrief?.parsed_output && (lastBrief.parsed_output as TaskBrief).where_it_stands ? { brief: lastBrief.parsed_output as TaskBrief, generatedAt: lastBrief.created_at as string } : null;
 
   const name = (uid: string | null) => (uid ? members.find((m) => m.user_id === uid)?.full_name ?? 'former member' : 'Unassigned');
   const items: TimelineItem[] = [];
@@ -98,6 +102,15 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
               )}
             </CardContent>
           </Card>
+          <TaskBriefCard
+            taskId={task.id}
+            taskTitle={task.title}
+            initial={briefData}
+            canGenerate={can(ctx.role, 'brief.generate')}
+            canAdd={can(ctx.role, 'task.create')}
+            selfId={ctx.user.id}
+            meetingId={task.source_meeting_id}
+          />
           <Card>
             <CardHeader><CardTitle>Complete history</CardTitle></CardHeader>
             <CardContent><Timeline items={items} /></CardContent>

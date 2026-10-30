@@ -60,7 +60,7 @@ export const getNavBadges = cache(async (ctx: AppContext): Promise<NavBadges> =>
       .lte('meeting.scheduled_at', inAWeek),
     ctx.supabase.from('handovers').select('id', { count: 'exact', head: true }).eq('workspace_id', ws).eq('incoming_user_id', me).gte('completed_at', threeDaysAgo),
     ctx.supabase.from('meeting_participants').select('meeting_id, meeting:meetings!inner(status,workspace_id)').eq('user_id', me).eq('attended', false).eq('meeting.status', 'completed').eq('meeting.workspace_id', ws),
-    ctx.supabase.from('ai_generations').select('target_id').eq('workspace_id', ws).eq('created_by', me).eq('generation_type', 'catch_up_brief').eq('status', 'success'),
+    ctx.supabase.from('ai_generations').select('target_id').eq('workspace_id', ws).eq('created_by', me).eq('generation_type', 'catch_up_brief').eq('target_type', 'meeting').eq('status', 'success'),
   ]);
 
   const myRisk = health.riskTasks.filter((r) => r.assignee_id === me);

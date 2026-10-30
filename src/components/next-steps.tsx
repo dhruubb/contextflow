@@ -8,7 +8,7 @@ import { api, ClientApiError } from '@/lib/client-api';
 import { Button } from '@/components/ui';
 
 /** Suggested next steps from an AI brief, each one addable to the reader's own task list. */
-export function NextSteps({ steps, meetingId, selfId, canAdd }: { steps: string[]; meetingId: string; selfId?: string; canAdd: boolean }) {
+export function NextSteps({ steps, meetingId, selfId, canAdd, source = 'an AI catch-up brief' }: { steps: string[]; meetingId?: string | null; selfId?: string; canAdd: boolean; source?: string }) {
   const router = useRouter();
   const [added, setAdded] = useState<Record<number, string | 'exists'>>({});
   const [busy, setBusy] = useState<number | 'all' | null>(null);
@@ -16,7 +16,7 @@ export function NextSteps({ steps, meetingId, selfId, canAdd }: { steps: string[
   async function add(i: number) {
     try {
       const { task } = await api<{ task: { id: string } }>('/api/tasks', {
-        body: { title: steps[i].slice(0, 200), description: 'Added from an AI catch-up brief.', assignee_id: selfId ?? null, source_meeting_id: meetingId, priority: 'medium' },
+        body: { title: steps[i].slice(0, 200), description: `Added from ${source}.`, assignee_id: selfId ?? null, source_meeting_id: meetingId || null, priority: 'medium' },
       });
       setAdded((a) => ({ ...a, [i]: task.id }));
       return true;
