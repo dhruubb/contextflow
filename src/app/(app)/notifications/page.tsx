@@ -5,6 +5,7 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, Empty, Table } from '@
 import { fmtDateTime } from '@/lib/utils';
 import { Preferences, RunReminders, TelegramConnect } from './notifications-client';
 import { can } from '@/lib/rbac';
+import { RefreshOnMount } from '@/components/refresh-on-mount';
 
 export const metadata = { title: 'Notifications' };
 
@@ -19,12 +20,16 @@ export default async function NotificationsPage() {
   const [{ data: conn }, { data: prefs }, { data: history }] = await Promise.all([
     ctx.supabase.from('notification_connections').select('is_verified,verified_at,telegram_username,token_expires_at').eq('user_id', ctx.user.id).eq('channel', 'telegram').maybeSingle(),
     ctx.supabase.from('notification_preferences').select('*').eq('user_id', ctx.user.id).eq('channel', 'telegram').maybeSingle(),
-    ctx.supabase.from('notifications').select('id,channel,title,message,event_type,status,error_message,sent_at,created_at').eq('user_id', ctx.user.id).eq('workspace_id', ctx.workspace.id).order('created_at', { ascending: false }).limit(50),
+    ctx.supabase.from('notifications').select('*').eq('user_id', ctx.user.id).eq('workspace_id', ctx.workspace.id).order('created_at', { ascending: false }).limit(50),
   ]);
+  // Opening this page marks everything as read (clears the sidebar badge). No-op before migration 004.
+  const unreadIds = new Set((history ?? []).filter((n) => n.read_at === null).map((n) => n.id as string));
+  if (unreadIds.size) await ctx.supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('user_id', ctx.user.id).is('read_at', null);
   const p = prefs ?? { notify_task_assigned: true, notify_task_reassigned: true, notify_deadline_approaching: true, notify_task_overdue: true, notify_meeting_scheduled: true, notify_handover: true };
 
   return (
     <div className="animate-in">
+      {unreadIds.size > 0 && <RefreshOnMount />}
       <PageHeader title="Notifications" description="Telegram alerts for assignments, deadlines and handovers — with full delivery history." />
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4">
@@ -55,7 +60,10 @@ export default async function NotificationsPage() {
               <tbody>
                 {(history ?? []).map((n) => (
                   <tr key={n.id}>
-                    <td className="whitespace-nowrap text-xs font-medium">{EVENT_LABEL[n.event_type] ?? n.event_type}</td>
+                    <td className="whitespace-nowrap text-xs font-medium">
+                      {unreadIds.has(n.id) && <span className="mr-1.5 inline-block size-1.5 rounded-full bg-red-500 align-middle" title="New" />}
+                      {EVENT_LABEL[n.event_type] ?? n.event_type}
+                    </td>
                     <td className="max-w-sm text-xs text-muted-foreground"><p className="font-medium text-foreground">{n.title}</p>{n.message}{n.error_message && <p className="text-red-500">Error: {n.error_message}</p>}</td>
                     <td><Badge tone={n.channel === 'telegram' ? 'indigo' : 'neutral'}>{n.channel === 'in_app' ? 'in-app' : n.channel}</Badge></td>
                     <td><Badge tone={n.status === 'delivered' ? 'green' : n.status === 'failed' ? 'red' : 'amber'}>{n.status}</Badge></td>

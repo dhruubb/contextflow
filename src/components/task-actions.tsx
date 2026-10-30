@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRightLeft, CalendarClock, Check, CheckCircle2, ChevronDown, ExternalLink, MoreHorizontal, Play, Repeat2, UserPlus } from 'lucide-react';
+import { ArrowRightLeft, Ban, CalendarClock, Check, CheckCircle2, ChevronDown, ExternalLink, MoreHorizontal, Play, Repeat2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/client-api';
 import { Button, Dialog, Field, Input, Textarea } from '@/components/ui';
@@ -82,6 +82,7 @@ const STATUS = [
 export function StatusPill({ task, editable }: { task: ActionTask; editable: boolean }) {
   const { patch, busy } = useTaskPatch();
   const [closing, setClosing] = useState(false);
+  const [blocking, setBlocking] = useState(false);
   const s = STATUS.find((x) => x.v === task.status) ?? STATUS[0];
   const pill = (
     <span className={cn('inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium leading-none', s.cls, editable && 'cursor-pointer hover:brightness-110', busy && 'opacity-60')}>
@@ -102,7 +103,8 @@ export function StatusPill({ task, editable }: { task: ActionTask; editable: boo
                 close();
                 if (o.v === task.status) return;
                 if (o.v === 'done') setClosing(true);
-                else patch(task.id, { status: o.v }, `Moved to ${o.label}`);
+                else if (o.v === 'blocked') setBlocking(true);
+                else patch(task.id, { status: o.v, note: task.status === 'blocked' ? 'Blocker cleared' : null }, `Moved to ${o.label}`);
               }}
             >
               {o.label}
@@ -111,6 +113,7 @@ export function StatusPill({ task, editable }: { task: ActionTask; editable: boo
         }
       </Menu>
       <CompleteDialog task={task} open={closing} onClose={() => setClosing(false)} />
+      <BlockDialog task={task} open={blocking} onClose={() => setBlocking(false)} />
     </>
   );
 }
@@ -228,7 +231,7 @@ export function TaskRowMenu({
 }) {
   const router = useRouter();
   const { patch } = useTaskPatch();
-  const [dialog, setDialog] = useState<'complete' | 'deadline' | null>(null);
+  const [dialog, setDialog] = useState<'complete' | 'deadline' | 'block' | null>(null);
   async function carry() {
     try {
       const r = await api<{ carried: number }>(`/api/meetings/${carryTo!.id}/carry-forward`, { body: { task_ids: [task.id] } });
@@ -246,7 +249,12 @@ export function TaskRowMenu({
             <MenuItem href={`/tasks/${task.id}`} icon={<ExternalLink />}>Open task & history</MenuItem>
             {canEdit && task.status !== 'done' && (
               <>
-                {task.status !== 'in_progress' && <MenuItem icon={<Play />} onClick={() => { close(); patch(task.id, { status: 'in_progress' }, 'Moved to In Progress'); }}>Start working</MenuItem>}
+                {task.status !== 'in_progress' && (
+                  <MenuItem icon={<Play />} onClick={() => { close(); patch(task.id, { status: 'in_progress', note: task.status === 'blocked' ? 'Blocker cleared' : null }, task.status === 'blocked' ? 'Blocker cleared — back In Progress' : 'Moved to In Progress'); }}>
+                    {task.status === 'blocked' ? 'Resume work (blocker cleared)' : 'Start working'}
+                  </MenuItem>
+                )}
+                {task.status !== 'blocked' && <MenuItem icon={<Ban />} onClick={() => { close(); setDialog('block'); }}>Mark as blocked…</MenuItem>}
                 <MenuItem icon={<CheckCircle2 />} onClick={() => { close(); setDialog('complete'); }}>Complete with outcome…</MenuItem>
                 <MenuItem icon={<CalendarClock />} onClick={() => { close(); setDialog('deadline'); }}>Change deadline…</MenuItem>
                 {task.assignee_id && <MenuItem icon={<Repeat2 />} href={`/handovers?task=${task.id}&from=${task.assignee_id}`}>Hand over…</MenuItem>}
@@ -258,14 +266,51 @@ export function TaskRowMenu({
       </Menu>
       <CompleteDialog task={task} open={dialog === 'complete'} onClose={() => setDialog(null)} />
       {dialog === 'deadline' && <DeadlineDialog task={task} open onClose={() => setDialog(null)} />}
+      <BlockDialog task={task} open={dialog === 'block'} onClose={() => setDialog(null)} />
     </>
   );
 }
 
 /* --------------------------------------------------------------- generic small action buttons */
-export function StartButton({ task, label = 'Start', size = 'sm', variant = 'outline' }: { task: ActionTask; label?: string; size?: 'sm' | 'default'; variant?: 'outline' | 'default' }) {
+export function StartButton({ task, label, size = 'sm', variant = 'outline', resume }: { task: ActionTask; label?: string; size?: 'sm' | 'default'; variant?: 'outline' | 'default'; resume?: boolean }) {
   const { patch, busy } = useTaskPatch();
-  return <Button size={size} variant={variant} loading={!!busy} onClick={() => patch(task.id, { status: 'in_progress', note: label === 'Unblock' ? 'Unblocked' : null }, label === 'Unblock' ? 'Unblocked — back In Progress' : 'Started')}><Play /> {label}</Button>;
+  return (
+    <Button
+      size={size}
+      variant={variant}
+      loading={!!busy}
+      title={resume ? 'The blocker is sorted — move this back to In Progress' : 'Move to In Progress'}
+      onClick={() => patch(task.id, { status: 'in_progress', note: resume ? 'Blocker cleared' : null }, resume ? 'Blocker cleared — back In Progress' : 'Started')}
+    >
+      <Play /> {label ?? (resume ? 'Resume work' : 'Start')}
+    </Button>
+  );
+}
+
+/** Marking a task blocked always asks what it is waiting on — that reason is what the team needs. */
+export function BlockDialog({ task, open, onClose }: { task: ActionTask; open: boolean; onClose: () => void }) {
+  const { patch, busy } = useTaskPatch();
+  const [reason, setReason] = useState('');
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="What is blocking this?"
+      description="Blocked means you can't continue until something or someone else moves. The task creator is notified."
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button loading={!!busy} disabled={reason.trim().length < 3} onClick={async () => { if (await patch(task.id, { status: 'blocked', note: reason.trim() }, 'Marked as blocked')) { setReason(''); onClose(); } }}>
+            Mark as blocked
+          </Button>
+        </>
+      }
+    >
+      <Field label="Waiting on…">
+        <Input value={reason} onChange={(e) => setReason(e.target.value)} autoFocus placeholder="e.g. uptime export from the monitoring vendor" />
+      </Field>
+    </Dialog>
+  );
 }
 
 export function DeadlineButton({ task, label = 'Change deadline', variant = 'outline' }: { task: ActionTask; label?: string; variant?: 'outline' | 'default' | 'ghost' }) {

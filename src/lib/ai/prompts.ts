@@ -180,7 +180,8 @@ Rules:
 - Use only facts stated in the sources. Do not use outside knowledge, and never invent numbers, names, dates or policies.
 - Cite every factual sentence inline with its source id in square brackets, e.g. "Use port 6543 [S2]." Cite only ids that exist.
 - If the sources do not contain enough information to answer, set "insufficient": true and say clearly what is missing (you may still state any partial facts that are supported, with citations).
-- Be concise: a direct answer first, then short supporting detail or bullet points if useful.
+- Be concise and use plain language: one direct sentence first, then a "- " bullet list if there are several points.
+- Put the citation at the end of the sentence or bullet it supports, e.g. "- Monthly uptime (target 99.9%) [S1]". Do NOT add a separate "Sources:" line.
 JSON shape: {"answer": string (markdown allowed), "insufficient": boolean, "citations": ["S1", ...]}`,
     user: JSON.stringify({ question, sources }),
   };

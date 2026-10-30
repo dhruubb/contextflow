@@ -5,7 +5,7 @@ import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 import {
   Activity, Bell, BookOpen, CalendarDays, CheckSquare, ChevronsUpDown, LayoutDashboard, LogOut, Menu, Moon,
-  Repeat2, Settings, Sparkles, Sun, Waypoints, HeartPulse,
+  Repeat2, Settings, Sparkles, Sun, Waypoints, HeartPulse, TrendingDown, TrendingUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
@@ -21,13 +21,52 @@ const NAV = [
   { href: '/handovers', label: 'Handovers', icon: Repeat2 },
   { href: '/knowledge', label: 'Knowledge Base', icon: BookOpen },
   { href: '/briefs', label: 'AI Briefs', icon: Sparkles },
-  { href: '/continuity', label: 'Continuity Engine', icon: HeartPulse },
+  { href: '/performance', label: 'Performance', icon: HeartPulse },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/activity', label: 'Activity', icon: Activity },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
+export interface ShellBadges {
+  tasks: { count: number; urgent: boolean };
+  meetings: number;
+  handovers: number;
+  briefs: number;
+  notifications: number;
+  performance: { score: number; delta: number | null };
+}
+
+function NavBadge({ href, badges }: { href: string; badges?: ShellBadges }) {
+  if (!badges) return null;
+  const pill = (n: number, tone: 'red' | 'teal' | 'muted', title: string) =>
+    n > 0 ? (
+      <span title={title} className={cn('ml-auto min-w-[20px] rounded-full px-1.5 text-center text-[10px] font-semibold leading-5 tabular-nums',
+        tone === 'red' ? 'bg-red-500 text-white' : tone === 'teal' ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground')}>
+        {n > 99 ? '99+' : n}
+      </span>
+    ) : null;
+  switch (href) {
+    case '/tasks': return pill(badges.tasks.count, badges.tasks.urgent ? 'red' : 'teal', `${badges.tasks.count} of your tasks need action`);
+    case '/meetings': return pill(badges.meetings, 'muted', `${badges.meetings} meeting(s) in the next 7 days`);
+    case '/handovers': return pill(badges.handovers, 'teal', `${badges.handovers} handover(s) received recently`);
+    case '/briefs': return pill(badges.briefs, 'teal', `${badges.briefs} missed meeting(s) to catch up on`);
+    case '/notifications': return pill(badges.notifications, 'red', `${badges.notifications} unread`);
+    case '/performance': {
+      const d = badges.performance.delta;
+      if (!d) return <span className="ml-auto text-[11px] tabular-nums text-muted-foreground" title="Performance score">{badges.performance.score}</span>;
+      return (
+        <span title={`Score ${badges.performance.score} (${d > 0 ? '+' : ''}${d} since last change)`} className={cn('ml-auto flex items-center gap-0.5 text-[11px] font-semibold tabular-nums', d > 0 ? 'text-emerald-500' : 'text-red-500')}>
+          {d > 0 ? <TrendingUp className="size-3.5" /> : <TrendingDown className="size-3.5" />}
+          {d > 0 ? '+' : ''}{d}
+        </span>
+      );
+    }
+    default: return null;
+  }
+}
+
 interface ShellProps {
+  badges?: ShellBadges;
   user: { name: string; email: string };
   role: string;
   workspace: { id: string; name: string };
@@ -50,7 +89,7 @@ function ThemeToggle() {
   );
 }
 
-export function Shell({ user, role, workspace, workspaces, children }: ShellProps) {
+export function Shell({ user, role, workspace, workspaces, children, badges }: ShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -112,6 +151,7 @@ export function Shell({ user, role, workspace, workspaces, children }: ShellProp
           >
             <Icon className={cn('size-4', isActive(href) && 'text-primary')} />
             {label}
+            <NavBadge href={href} badges={badges} />
           </Link>
         ))}
       </nav>

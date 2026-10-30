@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import type { SupabaseServer } from '@/lib/supabase/server';
 
 /**
@@ -38,6 +39,8 @@ export interface RiskTask {
   source_meeting_title: string | null;
   carry_count: number;
   signals: SignalKey[];
+  /** latest reason given when the task was marked blocked */
+  blocked_reason?: string | null;
 }
 
 export interface HealthReport {
@@ -50,7 +53,7 @@ export interface HealthReport {
   agendaSuggestions: { task: RiskTask; reason: string }[];
 }
 
-export async function computeHealth(supabase: SupabaseServer, workspaceId: string): Promise<HealthReport> {
+export const computeHealth = cache(async (supabase: SupabaseServer, workspaceId: string): Promise<HealthReport> => {
   const now = Date.now();
   const [{ data: tasks }, { data: links }, { data: nextMeetings }, { data: participants }] = await Promise.all([
     supabase
@@ -100,6 +103,19 @@ export async function computeHealth(supabase: SupabaseServer, workspaceId: strin
     }
   }
 
+  // What is each blocked task waiting on? (latest reason recorded in its history)
+  const blockedIds = riskTasks.filter((r) => r.signals.includes('blocked')).map((r) => r.id);
+  if (blockedIds.length) {
+    const { data: reasons } = await supabase
+      .from('task_events')
+      .select('task_id,notes,created_at')
+      .in('task_id', blockedIds)
+      .eq('event_type', 'status_changed')
+      .eq('new_value', 'blocked')
+      .order('created_at', { ascending: false });
+    for (const r of riskTasks) r.blocked_reason = reasons?.find((x) => x.task_id === r.id && x.notes)?.notes ?? null;
+  }
+
   const components = SIGNALS.map((s) => ({
     key: s.key, label: s.label, why: s.why, count: counts[s.key], cap: s.cap,
     penalty: Math.min(s.cap, counts[s.key] * s.per),
@@ -132,4 +148,4 @@ export async function computeHealth(supabase: SupabaseServer, workspaceId: strin
     nextMeeting,
     agendaSuggestions,
   };
-}
+});

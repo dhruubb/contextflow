@@ -21,13 +21,13 @@ export function dueSoonText(due: string | null | undefined) {
 }
 
 /** One short sentence explaining why a task needs attention. */
-export function whyText(t: { signals: Signal[]; due_date: string | null; assignee_name?: string | null; source_meeting_title?: string | null; carry_count?: number; status?: string }, me?: { isOwner: boolean }) {
+export function whyText(t: { signals: Signal[]; due_date: string | null; blocked_reason?: string | null; assignee_name?: string | null; source_meeting_title?: string | null; carry_count?: number; status?: string }, me?: { isOwner: boolean }) {
   const s = new Set(t.signals);
   const parts: string[] = [];
   if (s.has('overdue')) parts.push(overdueText(t.due_date));
   if (s.has('dueSoon')) parts.push(`${dueSoonText(t.due_date)}, not started`);
   if (s.has('unassigned')) parts.push('no one owns it');
-  if (s.has('blocked')) parts.push('blocked');
+  if (s.has('blocked')) parts.push(t.blocked_reason ? `blocked — waiting on ${t.blocked_reason.replace(/^waiting (on|for)\s+/i, '')}` : 'blocked');
   if (s.has('carried')) parts.push(`postponed ${t.carry_count ?? 2} meetings in a row`);
   if (s.has('missedOwner')) parts.push(`${me?.isOwner ? 'you' : t.assignee_name?.split(' ')[0] ?? 'the owner'} missed the meeting where it was agreed`);
   const text = parts.filter(Boolean).join(' · ');

@@ -20,6 +20,7 @@ cp .env.example .env.local      # fill in the values
 1. `supabase/migrations/20261030000001_contextflow_schema.sql`: 18 tables, foreign keys and indexes.
 2. `supabase/migrations/20261030000002_rls_fixes_search_storage.sql`: RLS policies for every table, role helpers, the profile-on-signup trigger, full-text search, notification dedupe, the atomic handover function, and the private `documents` storage bucket. Safe to re-run.
 3. `supabase/migrations/20261030000003_rag_pgvector.sql`: the pgvector extension, the `document_chunks` table (768-dim embeddings, HNSW + GIN indexes, RLS), document processing status and duplicate hashes, and the `match_document_chunks` hybrid retrieval function. Safe to re-run.
+4. `supabase/migrations/20261030000004_badges_performance.sql`: unread notifications (sidebar badge) and the Performance score history (trend arrow).
 
 ```bash
 npm run test:db     # checks tables, migration 002, and the storage bucket
@@ -141,7 +142,7 @@ If any step fails, the document is marked `failed` with the reason, its chunks a
 - **Knowledge Base page:** "Ask the knowledge base" at the top, with clickable `[S#]` citation chips, a source list (document, page or chunk, relevance score, snippet), loading skeletons and error states.
 - **Document pages:** index status, chunk count and embedding model, a per-document Q&A, plus **Re-index** and **Delete**.
 
-## 5. Special feature: Context Continuity Engine
+## 5. Special feature: Context Continuity Engine ("Performance" page)
 
 The **Context Health Score** is deterministic and explainable. It starts at 100, and each signal subtracts a fixed penalty per task, up to a cap:
 
@@ -154,7 +155,7 @@ The **Context Health Score** is deterministic and explainable. It starts at 100,
 | Due within 48 h and still To Do | 3 | 9 |
 | Owner missed the meeting where the task was agreed | 3 | 9 |
 
-A score of 80 or more is healthy, 55–79 is moderate, and below 55 is critical. The `/continuity` page shows:
+A score of 80 or more is healthy, 55–79 is moderate, and below 55 is critical. Each time the score changes, a snapshot is stored (`health_snapshots`). The sidebar, dashboard and Performance page then show a green ▲ or red ▼ with the change since the previous score. The `/continuity` page shows:
 - Each component: its count, penalty and reason.
 - The at-risk tasks.
 - **Suggestions for the next meeting**: unresolved at-risk tasks not yet on that meeting's agenda. You can add them in one click; they keep their original task ID and history.

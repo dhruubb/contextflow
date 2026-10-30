@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { ArrowRight, CalendarDays, CheckCircle2, Repeat2, Sparkles, Users } from 'lucide-react';
+import { ArrowRight, CalendarDays, CheckCircle2, Repeat2, Sparkles, TrendingDown, TrendingUp, Users } from 'lucide-react';
 import { requireContext } from '@/lib/auth';
 import { can } from '@/lib/rbac';
 import { computeHealth, type RiskTask } from '@/lib/continuity';
+import { getNavBadges } from '@/lib/nav-badges';
 import { getMembers, TASK_SELECT, activityHref, activityText, type TaskRow } from '@/lib/queries';
 import { whyText, severity } from '@/lib/task-insight';
 import { Avatar, Card, buttonVariants } from '@/components/ui';
@@ -54,6 +55,7 @@ export default async function Dashboard() {
     ctx.supabase.from('meetings').select('id,title,scheduled_at,status,meeting_participants(user_id,attended)').eq('workspace_id', ws).gte('scheduled_at', windowStart).lte('scheduled_at', windowEnd),
   ]);
 
+  const trend = (await getNavBadges(ctx).catch(() => null))?.performance;
   const all = (tasks ?? []) as unknown as TaskRow[];
   const open = all.filter((t) => t.status !== 'done');
   const mine = open.filter((t) => t.assignee_id === me);
@@ -83,7 +85,7 @@ export default async function Dashboard() {
     const mineTask = r.assignee_id === me;
     if (s.has('unassigned')) return isLead ? [<OwnerPicker key="a" task={a} members={owners} editable compact primary />] : [];
     if (!mineTask && isLead) return [<OwnerPicker key="r" task={a} members={owners} editable compact primary={false} />];
-    if (s.has('blocked')) return [<StartButton key="u" task={a} label="Unblock" variant="default" />, <Link key="h" href={`/handovers?task=${r.id}&from=${r.assignee_id}`} className={buttonVariants({ size: 'sm', variant: 'ghost' })}><Repeat2 /> Hand over</Link>];
+    if (s.has('blocked')) return [<StartButton key="u" task={a} resume variant="default" />, <Link key="h" href={`/handovers?task=${r.id}&from=${r.assignee_id}`} className={buttonVariants({ size: 'sm', variant: 'ghost' })}><Repeat2 /> Hand over</Link>];
     if (s.has('overdue')) return [<CompleteButton key="c" task={a} variant="default" />, <DeadlineButton key="e" task={a} label="New date" variant="ghost" />];
     if (s.has('dueSoon')) return [<StartButton key="s" task={a} variant="default" />];
     if (s.has('missedOwner') && r.source_meeting_id) return [<Link key="b" href={`/briefs?meeting=${r.source_meeting_id}`} className={buttonVariants({ size: 'sm', variant: 'secondary' })}><Sparkles /> Catch up</Link>];
@@ -109,7 +111,7 @@ export default async function Dashboard() {
     { label: 'My open tasks', value: String(mine.length), sub: myRisk.length ? `${myRisk.length} need action` : 'All on track', href: '/tasks?filter=mine', alert: myRisk.length > 0 },
     { label: 'Overdue (team)', value: String(overdueCount), sub: overdueCount ? 'Past their deadline' : 'Nothing overdue', href: '/tasks?filter=overdue', alert: overdueCount > 0 },
     { label: 'Next meeting', value: next ? new Date(next.scheduled_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: TZ }) : '—', sub: next?.title ?? 'Nothing scheduled', href: next ? `/meetings/${next.id}` : '/meetings' },
-    { label: 'Health score', value: `${health.score}`, suffix: '/100', sub: health.status === 'healthy' ? 'Good' : health.status === 'moderate' ? 'Fair — some work is slipping' : 'At risk — act now', href: '/continuity', alert: health.status === 'critical' },
+    { label: 'Performance', value: `${health.score}`, suffix: '/100', sub: health.status === 'healthy' ? 'Good' : health.status === 'moderate' ? 'Fair — some work is slipping' : 'At risk — act now', href: '/performance', alert: health.status === 'critical', trend: trend?.delta ?? null },
   ];
 
   return (
@@ -147,6 +149,12 @@ export default async function Dashboard() {
               <p className={cn('mt-1 text-2xl font-semibold tabular-nums tracking-tight', s.alert && 'text-red-600 dark:text-red-400')}>
                 {s.value}
                 {s.suffix && <span className="text-sm font-normal text-muted-foreground">{s.suffix}</span>}
+                {'trend' in s && s.trend ? (
+                  <span className={cn('ml-2 inline-flex items-center gap-0.5 text-sm font-semibold', s.trend > 0 ? 'text-emerald-500' : 'text-red-500')}>
+                    {s.trend > 0 ? <TrendingUp className="size-4" /> : <TrendingDown className="size-4" />}
+                    {s.trend > 0 ? '+' : ''}{s.trend}
+                  </span>
+                ) : null}
               </p>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{s.sub}</p>
             </Card>
@@ -200,7 +208,7 @@ export default async function Dashboard() {
             <Card>
               <div className="flex items-center justify-between border-b px-5 py-3.5">
                 <h2 className="flex items-center gap-2 text-sm font-semibold"><Users className="size-4 text-muted-foreground" /> {isViewer ? 'Work at risk' : 'Team work that needs you'}</h2>
-                <Link href="/continuity" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Continuity Engine <ArrowRight className="size-3" /></Link>
+                <Link href="/performance" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Performance <ArrowRight className="size-3" /></Link>
               </div>
               {(isViewer ? health.riskTasks : teamRisk).length === 0 && !(isLead && next && health.agendaSuggestions.length) ? (
                 <div className="flex items-center gap-3 px-5 py-6 text-sm text-muted-foreground"><CheckCircle2 className="size-5 text-emerald-500" /> The team is on track.</div>
